@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, Plus } from 'lucide-react';
@@ -21,7 +20,7 @@ const HomeScreen = () => {
         .from('videos')
         .select(`
           *,
-          profiles:user_id(full_name, avatar_url)
+          profiles!videos_user_id_fkey(full_name, avatar_url)
         `)
         .eq('is_published', true)
         .order('created_at', { ascending: false });
