@@ -2,23 +2,39 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Eye, EyeOff, User, Lock } from 'lucide-react';
+import { Eye, EyeOff, User, Lock, Mail } from 'lucide-react';
+import { useAuth } from '@/hooks/useAuth';
 
-interface AuthScreenProps {
-  onLogin: () => void;
-}
-
-const AuthScreen = ({ onLogin }: AuthScreenProps) => {
+const AuthScreen = () => {
   const [isLogin, setIsLogin] = useState(true);
   const [isUserType, setIsUserType] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [fullName, setFullName] = useState('');
   const [specialty, setSpecialty] = useState('');
+  const [loading, setLoading] = useState(false);
+  const { signIn, signUp } = useAuth();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    onLogin();
+    setLoading(true);
+
+    try {
+      if (isLogin) {
+        await signIn(email, password);
+      } else {
+        const metadata = {
+          full_name: fullName,
+          specialty: isUserType ? 'user' : specialty
+        };
+        await signUp(email, password, metadata);
+      }
+    } catch (error) {
+      console.error('Auth error:', error);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -37,36 +53,53 @@ const AuthScreen = ({ onLogin }: AuthScreenProps) => {
           {/* Header */}
           <div className="text-center space-y-4">
             <h1 className="text-4xl font-bold text-white">
-              {isLogin ? 'AUTHORIZATION' : 'CREATE A NEW'}
+              {isLogin ? 'WELCOME TO' : 'JOIN'}
             </h1>
             <h1 className="text-4xl font-bold">
-              <span className="text-white">OF YOUR </span>
-              <span className="text-red-500">ACCOUNT</span>
+              <span className="text-white">VISION</span>
+              <span className="text-red-500">HUB</span>
             </h1>
           </div>
 
           {/* User Type Toggle */}
-          <div className="flex items-center justify-center space-x-8">
-            <span className="text-white text-lg">User</span>
-            <div 
-              className="relative w-16 h-8 bg-red-500 rounded-full cursor-pointer transition-all duration-300"
-              onClick={() => setIsUserType(!isUserType)}
-            >
-              <div className={`absolute top-1 w-6 h-6 bg-white rounded-full transition-transform duration-300 ${isUserType ? 'left-1' : 'left-9'}`}></div>
+          {!isLogin && (
+            <div className="flex items-center justify-center space-x-8">
+              <span className="text-white text-lg">User</span>
+              <div 
+                className="relative w-16 h-8 bg-red-500 rounded-full cursor-pointer transition-all duration-300"
+                onClick={() => setIsUserType(!isUserType)}
+              >
+                <div className={`absolute top-1 w-6 h-6 bg-white rounded-full transition-transform duration-300 ${isUserType ? 'left-1' : 'left-9'}`}></div>
+              </div>
+              <span className="text-white text-lg">Professional</span>
             </div>
-            <span className="text-white text-lg">Professional</span>
-          </div>
+          )}
 
           {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-6">
+            {!isLogin && (
+              <div className="relative">
+                <User className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+                <Input
+                  type="text"
+                  placeholder="Full Name"
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  className="pl-12 py-4 bg-white/10 border-white/20 text-white placeholder-gray-300 rounded-xl backdrop-blur-sm"
+                  required
+                />
+              </div>
+            )}
+
             <div className="relative">
-              <User className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+              <Mail className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
               <Input
                 type="email"
                 placeholder="Email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="pl-12 py-4 bg-white/10 border-white/20 text-white placeholder-gray-300 rounded-xl backdrop-blur-sm"
+                required
               />
             </div>
 
@@ -78,6 +111,8 @@ const AuthScreen = ({ onLogin }: AuthScreenProps) => {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className="pl-12 pr-12 py-4 bg-white/10 border-white/20 text-white placeholder-gray-300 rounded-xl backdrop-blur-sm"
+                required
+                minLength={6}
               />
               <button
                 type="button"
@@ -88,12 +123,13 @@ const AuthScreen = ({ onLogin }: AuthScreenProps) => {
               </button>
             </div>
 
-            {!isLogin && (
+            {!isLogin && !isUserType && (
               <div className="relative">
                 <select
                   value={specialty}
                   onChange={(e) => setSpecialty(e.target.value)}
                   className="w-full pl-4 pr-12 py-4 bg-white/10 border border-white/20 text-white rounded-xl backdrop-blur-sm appearance-none"
+                  required
                 >
                   <option value="" className="text-gray-900">Select your speciality</option>
                   <option value="producer" className="text-gray-900">Producer</option>
@@ -105,30 +141,12 @@ const AuthScreen = ({ onLogin }: AuthScreenProps) => {
               </div>
             )}
 
-            {isLogin && (
-              <div className="text-left">
-                <button type="button" className="text-white/60 text-sm">
-                  Forgot password?
-                </button>
-              </div>
-            )}
-
-            {isLogin && (
-              <div className="flex items-start space-x-3">
-                <input type="checkbox" className="mt-1" />
-                <p className="text-white/60 text-sm">
-                  By submitting this information, I agree with the{' '}
-                  <span className="text-white underline">Privacy policy</span> and{' '}
-                  <span className="text-white underline">Terms of use</span>
-                </p>
-              </div>
-            )}
-
             <Button
               type="submit"
-              className="w-full py-4 bg-red-500 hover:bg-red-600 text-white font-semibold rounded-xl transition-colors"
+              disabled={loading}
+              className="w-full py-4 bg-red-500 hover:bg-red-600 text-white font-semibold rounded-xl transition-colors disabled:opacity-50"
             >
-              {isLogin ? 'Log In' : 'Create Account'}
+              {loading ? 'Loading...' : (isLogin ? 'Sign In' : 'Create Account')}
             </Button>
 
             <Button
@@ -137,7 +155,7 @@ const AuthScreen = ({ onLogin }: AuthScreenProps) => {
               onClick={() => setIsLogin(!isLogin)}
               className="w-full py-4 border-white/30 text-white bg-transparent hover:bg-white/10 rounded-xl transition-colors"
             >
-              {isLogin ? 'Registration' : 'Back to Login'}
+              {isLogin ? 'Need an account? Sign Up' : 'Already have an account? Sign In'}
             </Button>
           </form>
         </div>
