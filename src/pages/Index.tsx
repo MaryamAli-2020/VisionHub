@@ -1,14 +1,17 @@
-// Update this page (the content is just a fallback if you fail to update the page)
+
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { useState } from 'react';
+import AuthScreen from '../components/AuthScreen';
+import MainApp from '../components/MainApp';
 
 const Index = () => {
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-100">
-      <div className="text-center">
-        <h1 className="text-4xl font-bold mb-4">Welcome to Your Blank App</h1>
-        <p className="text-xl text-gray-600">Start building your amazing project here!</p>
-      </div>
-    </div>
-  );
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+
+  if (!isAuthenticated) {
+    return <AuthScreen onLogin={() => setIsAuthenticated(true)} />;
+  }
+
+  return <MainApp />;
 };
 
 export default Index;
