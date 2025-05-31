@@ -21,7 +21,7 @@ const HomeScreen = () => {
         .from('videos')
         .select(`
           *,
-          profiles!videos_user_id_fkey(full_name, avatar_url)
+          profiles:user_id(full_name, avatar_url)
         `)
         .eq('is_published', true)
         .order('created_at', { ascending: false });
