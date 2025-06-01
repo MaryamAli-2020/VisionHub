@@ -1,3 +1,4 @@
+
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, Plus, ChevronDown, Filter, SortDesc } from 'lucide-react';
@@ -15,12 +16,12 @@ import {
 import { Database } from '@/integrations/supabase/types';
 
 type Profile = Database['public']['Tables']['profiles']['Row'];
-type Post = Database['public']['Tables']['posts']['Row'] & {
+type Video = Database['public']['Tables']['videos']['Row'] & {
   profiles: Profile | null;
 };
 
 type SortOption = 'latest' | 'oldest' | 'popular';
-type CategoryOption = 'all' | 'photo' | 'video' | 'article';
+type CategoryOption = 'all' | 'gaming' | 'music' | 'education' | 'entertainment' | 'sports' | 'technology' | 'comedy' | 'news';
 
 const HomeScreen = () => {
   const navigate = useNavigate();
@@ -29,16 +30,15 @@ const HomeScreen = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<SortOption>('latest');
   const [category, setCategory] = useState<CategoryOption>('all');
-  const [showFilters, setShowFilters] = useState(false);
 
-  const { data: posts, isLoading } = useQuery<Post[]>({
-    queryKey: ['posts', searchQuery, sortBy, category],
+  const { data: videos, isLoading } = useQuery<Video[]>({
+    queryKey: ['videos', searchQuery, sortBy, category],
     queryFn: async () => {
       let query = supabase
-        .from('posts')
+        .from('videos')
         .select(`
           *,
-          profiles:user_id (
+          profiles!videos_user_id_fkey (
             id,
             full_name,
             avatar_url,
@@ -53,12 +53,12 @@ const HomeScreen = () => {
 
       // Apply search
       if (searchQuery) {
-        query = query.ilike('content', `%${searchQuery}%`);
+        query = query.or(`title.ilike.%${searchQuery}%,description.ilike.%${searchQuery}%`);
       }
 
       // Apply category filter
       if (category !== 'all') {
-        query = query.contains('media_type', [category]);
+        query = query.eq('category', category);
       }
 
       // Apply sorting
@@ -67,7 +67,7 @@ const HomeScreen = () => {
           query = query.order('created_at', { ascending: true });
           break;
         case 'popular':
-          query = query.order('likes_count', { ascending: false });
+          query = query.order('views_count', { ascending: false });
           break;
         default:
           query = query.order('created_at', { ascending: false });
@@ -75,18 +75,17 @@ const HomeScreen = () => {
 
       const { data, error } = await query;
       if (error) throw error;
-      // Filter out posts where profiles is an error object
-      return (data ?? []).map((post) => {
-        // If profiles is not an object or missing required fields, set to null
+      
+      return (data ?? []).map((video) => {
         if (
-          !post.profiles ||
-          typeof post.profiles !== 'object' ||
-          ('error' in (post.profiles ?? {}))
+          !video.profiles ||
+          typeof video.profiles !== 'object' ||
+          ('error' in (video.profiles ?? {}))
         ) {
-          return { ...post, profiles: null };
+          return { ...video, profiles: null };
         }
-        return post as unknown as Post;
-      }) as Post[];
+        return video as Video;
+      });
     }
   });
 
@@ -166,22 +165,37 @@ const HomeScreen = () => {
             <DropdownMenuTrigger asChild>
               <Button variant="outline" className="rounded-xl">
                 <Filter className="w-4 h-4 mr-2" />
-                {category === 'all' ? 'All Types' : 
+                {category === 'all' ? 'All Categories' : 
                  category.charAt(0).toUpperCase() + category.slice(1)}
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent>
               <DropdownMenuItem onClick={() => setCategory('all')}>
-                All Types
+                All Categories
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setCategory('photo')}>
-                Photos
+              <DropdownMenuItem onClick={() => setCategory('gaming')}>
+                Gaming
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setCategory('video')}>
-                Videos
+              <DropdownMenuItem onClick={() => setCategory('music')}>
+                Music
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setCategory('article')}>
-                Articles
+              <DropdownMenuItem onClick={() => setCategory('education')}>
+                Education
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setCategory('entertainment')}>
+                Entertainment
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setCategory('sports')}>
+                Sports
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setCategory('technology')}>
+                Technology
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setCategory('comedy')}>
+                Comedy
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setCategory('news')}>
+                News
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -215,9 +229,9 @@ const HomeScreen = () => {
               </div>
             )}
 
-            {/* Posts */}
+            {/* Videos */}
             <div className="mb-8">
-              <h2 className="text-xl font-bold mb-4">Latest Content</h2>
+              <h2 className="text-xl font-bold mb-4">Latest Videos</h2>
               {isLoading ? (
                 <div className="grid grid-cols-1 gap-6">
                   {[1, 2, 3].map((i) => (
@@ -233,53 +247,62 @@ const HomeScreen = () => {
                     </div>
                   ))}
                 </div>
-              ) : posts && posts.length > 0 ? (
+              ) : videos && videos.length > 0 ? (
                 <div className="grid grid-cols-1 gap-6">
-                  {posts.map((post) => (
-                    <div key={post.id} className="bg-white rounded-xl border border-gray-100 p-6">
-                      <div className="flex items-start space-x-4">
-                        <img
-                          src={post.profiles?.avatar_url || "/placeholder.svg"}
-                          alt={post.profiles?.full_name}
-                          className="w-12 h-12 rounded-full object-cover border border-gray-200"
-                        />
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center space-x-2 mb-2">
-                            <p className="font-semibold text-gray-900">
-                              {post.profiles?.full_name}
-                            </p>
-                            <span className="text-gray-400">•</span>
-                            <p className="text-sm text-gray-500">
-                              {new Date(post.created_at).toLocaleDateString()}
-                            </p>
+                  {videos.map((video) => (
+                    <div key={video.id} className="bg-white rounded-xl border border-gray-100 overflow-hidden">
+                      {/* Video Thumbnail/Player */}
+                      <div className="relative">
+                        {video.thumbnail_url ? (
+                          <img
+                            src={video.thumbnail_url}
+                            alt={video.title}
+                            className="w-full h-48 object-cover"
+                          />
+                        ) : (
+                          <div className="w-full h-48 bg-gray-200 flex items-center justify-center">
+                            <span className="text-gray-500">No thumbnail</span>
                           </div>
-                          <p className="text-gray-800 mb-4">{post.content}</p>
-                          
-                          {/* Media Preview */}
-                          {post.media_url?.map((url, index) => {
-                            const type = post.media_type?.[index];
-                            if (type === 'photo') {
-                              return (
-                                <img
-                                  key={url}
-                                  src={url}
-                                  alt="Post attachment"
-                                  className="rounded-lg max-h-96 w-full object-cover mb-4"
-                                />
-                              );
-                            }
-                            if (type === 'video') {
-                              return (
-                                <video
-                                  key={url}
-                                  src={url}
-                                  controls
-                                  className="rounded-lg max-h-96 w-full mb-4"
-                                />
-                              );
-                            }
-                            return null;
-                          })}
+                        )}
+                        {video.duration && (
+                          <span className="absolute bottom-2 right-2 bg-black bg-opacity-75 text-white text-xs px-2 py-1 rounded">
+                            {Math.floor(video.duration / 60)}:{(video.duration % 60).toString().padStart(2, '0')}
+                          </span>
+                        )}
+                      </div>
+                      
+                      {/* Video Info */}
+                      <div className="p-4">
+                        <div className="flex items-start space-x-3">
+                          <img
+                            src={video.profiles?.avatar_url || "/placeholder.svg"}
+                            alt={video.profiles?.full_name || 'Creator'}
+                            className="w-10 h-10 rounded-full object-cover border border-gray-200"
+                          />
+                          <div className="flex-1 min-w-0">
+                            <h3 className="font-semibold text-gray-900 line-clamp-2 mb-1">
+                              {video.title}
+                            </h3>
+                            <p className="text-sm text-gray-600 mb-1">
+                              {video.profiles?.full_name || 'Unknown Creator'}
+                            </p>
+                            <div className="flex items-center space-x-2 text-xs text-gray-500">
+                              <span>{video.views_count || 0} views</span>
+                              <span>•</span>
+                              <span>{new Date(video.created_at).toLocaleDateString()}</span>
+                              {video.category && (
+                                <>
+                                  <span>•</span>
+                                  <span className="capitalize">{video.category}</span>
+                                </>
+                              )}
+                            </div>
+                            {video.description && (
+                              <p className="text-sm text-gray-600 mt-2 line-clamp-2">
+                                {video.description}
+                              </p>
+                            )}
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -287,7 +310,7 @@ const HomeScreen = () => {
                 </div>
               ) : (
                 <div className="text-center py-8">
-                  <p className="text-gray-500">No posts available.</p>
+                  <p className="text-gray-500">No videos available.</p>
                 </div>
               )}
             </div>

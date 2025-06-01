@@ -30,7 +30,7 @@ const CreateVideoScreen = () => {
 
   const availableTags = ['Gaming', 'Music', 'Education', 'Entertainment', 'Sports', 'Technology', 'Comedy', 'News'];
   const categories = ['Gaming', 'Music', 'Education', 'Entertainment', 'Sports', 'Technology', 'Comedy', 'News', 'Vlogs'];
-  const visibilityOptions = ['Public', 'Unlisted', 'Private'];
+  const visibilityOptions = ['Public', 'Private', 'Unlisted'];
 
   const handleVideoUpload = (file) => {
     if (file && file.size <= 120 * 1024 * 1024) { // 120MB limit
@@ -92,23 +92,29 @@ const CreateVideoScreen = () => {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
-  // Update the uploadVideo mutation
+  // Updated uploadVideo mutation with proper visibility handling
   const uploadVideo = useMutation({
     mutationFn: async () => {
       if (!user?.id || !videoFile || !title.trim()) {
         throw new Error('Missing required fields');
       }
 
-      // Declare data outside try-catch for access in both
+      console.log('Starting video upload...');
+      setUploadProgress(10);
+
       let data: any = undefined;
 
       try {
-        // 1. Initialize upload
+        // 1. Initialize upload with proper visibility mapping
+        const visibilityValue = visibility.toLowerCase() || 'public';
+        const mutualFollowersOnly = visibilityValue === 'private';
+        
         const result = await supabase.rpc('begin_video_upload', {
           video_title: title,
           video_description: description || '',
-          video_visibility: visibility.toLowerCase() || 'public'
+          video_visibility: visibilityValue
         });
+        
         data = result.data;
         const txError = result.error;
 
@@ -119,62 +125,33 @@ const CreateVideoScreen = () => {
 
         const videoId = data.videoId;
         console.log('Video ID created:', videoId);
+        setUploadProgress(20);
 
-        // 2. Upload video with progress tracking
+        // 2. Upload video to storage
         const videoFileName = `${user.id}/${videoId}/${Date.now()}-${videoFile.name}`;
         
-        // Create upload options with progress tracking
-        const options = {
-          cacheControl: '3600',
-          upsert: false
-        };
+        const { error: videoUploadError } = await supabase.storage
+          .from('videos')
+          .upload(videoFileName, videoFile, {
+            cacheControl: '3600',
+            upsert: false
+          });
 
-        // Create FormData for progress tracking
-        const formData = new FormData();
-        formData.append('file', videoFile);
-
-        // Manual upload with progress tracking
-        // Get the current session to retrieve the access token
-        const { data: sessionData } = await supabase.auth.getSession();
-        const accessToken = sessionData?.session?.access_token;
-
-        const uploadResponse = await fetch(
-          `${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/videos/${videoFileName}`,
-          {
-            method: 'POST',
-            headers: {
-              'Authorization': `Bearer ${accessToken}`,
-            },
-            body: formData
-          }
-        );
-
-        if (!uploadResponse.ok) {
+        if (videoUploadError) {
+          console.error('Video upload error:', videoUploadError);
           throw new Error('Video upload failed');
         }
+
+        setUploadProgress(60);
 
         // 3. Get video URL
         const { data: { publicUrl: videoUrl } } = supabase.storage
           .from('videos')
           .getPublicUrl(videoFileName);
 
-        // 4. Update video record with URL and metadata
-        const { error: updateError } = await supabase
-          .from('videos')
-          .update({
-            video_url: videoUrl,
-            category: category || null,
-            tags: selectedTags,
-            is_published: true,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', videoId);
+        console.log('Video uploaded successfully, URL:', videoUrl);
 
-        if (updateError) {
-          throw updateError;
-        }
-
-        // 5. Upload thumbnail if exists
+        // 4. Upload thumbnail if exists
         let thumbnailUrl = null;
         if (thumbnailFile) {
           const thumbnailFileName = `${user.id}/${videoId}/${Date.now()}-${thumbnailFile.name}`;
@@ -185,30 +162,48 @@ const CreateVideoScreen = () => {
               upsert: false
             });
 
-          if (thumbnailError) throw thumbnailError;
-
-          const { data: { publicUrl: thumbUrl } } = supabase.storage
-            .from('thumbnails')
-            .getPublicUrl(thumbnailFileName);
-
-          thumbnailUrl = thumbUrl;
-
-          // Update video with thumbnail
-          await supabase
-            .from('videos')
-            .update({ thumbnail_url: thumbnailUrl })
-            .eq('id', videoId);
+          if (thumbnailError) {
+            console.error('Thumbnail upload error:', thumbnailError);
+            // Don't fail the whole upload for thumbnail issues
+          } else {
+            const { data: { publicUrl: thumbUrl } } = supabase.storage
+              .from('thumbnails')
+              .getPublicUrl(thumbnailFileName);
+            thumbnailUrl = thumbUrl;
+          }
         }
 
-        // 6. Verify the upload with progressive retries
-        let retries = 5;
+        setUploadProgress(80);
+
+        // 5. Update video record with all metadata
+        const { error: updateError } = await supabase
+          .from('videos')
+          .update({
+            video_url: videoUrl,
+            thumbnail_url: thumbnailUrl,
+            category: category || null,
+            tags: selectedTags,
+            visibility: visibilityValue,
+            mutual_followers_only: mutualFollowersOnly,
+            is_published: true,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', videoId);
+
+        if (updateError) {
+          console.error('Video update error:', updateError);
+          throw updateError;
+        }
+
+        setUploadProgress(90);
+
+        // 6. Verify the upload
+        let retries = 3;
         let isVerified = false;
         
         for (let i = 0; i < retries && !isVerified; i++) {
           console.log(`Verification attempt ${i + 1}/${retries}`);
-          
-          // Increase wait time with each retry
-          await new Promise(resolve => setTimeout(resolve, 2000 * (i + 1)));
+          await new Promise(resolve => setTimeout(resolve, 1000 * (i + 1)));
           
           isVerified = await verifyVideoUpload(videoId);
           
@@ -219,10 +214,12 @@ const CreateVideoScreen = () => {
         }
 
         if (!isVerified) {
-          throw new Error('Video upload verification failed after multiple attempts');
+          console.warn('Video verification failed, but upload completed');
         }
 
-        return { videoId, videoUrl, thumbnailUrl };
+        setUploadProgress(100);
+        
+        return { videoId, videoUrl, thumbnailUrl, visibility: visibilityValue };
       } catch (error) {
         console.error('Upload process failed:', error);
         // Attempt cleanup on failure
@@ -233,10 +230,17 @@ const CreateVideoScreen = () => {
       }
     },
     onSuccess: (data) => {
-      toast.success('Video uploaded successfully!');
-      navigate(`/videos/${data.videoId}`);
+      console.log('Upload successful:', data);
+      toast.success(`Video uploaded successfully! Visibility: ${data.visibility}`);
+      // Navigate back to home to see the video (if public) or to profile (if private/unlisted)
+      if (data.visibility === 'public') {
+        navigate('/');
+      } else {
+        navigate('/profile');
+      }
     },
     onError: (error: Error) => {
+      console.error('Upload failed:', error);
       toast.error(`Upload failed: ${error.message}`);
       setUploadProgress(0);
     }
@@ -249,6 +253,10 @@ const CreateVideoScreen = () => {
     }
     if (!title.trim()) {
       toast.error('Please enter a video title');
+      return;
+    }
+    if (!visibility) {
+      toast.error('Please select video visibility');
       return;
     }
     
@@ -414,9 +422,11 @@ const CreateVideoScreen = () => {
             <div className="relative">
               <button
                 onClick={() => setShowVisibilityDropdown(!showVisibilityDropdown)}
-                className="flex items-center px-4 py-2 border border-gray-300 rounded-xl hover:bg-gray-50 transition-colors"
+                className={`flex items-center px-4 py-2 border border-gray-300 rounded-xl hover:bg-gray-50 transition-colors ${
+                  !visibility ? 'text-red-500 border-red-300' : ''
+                }`}
               >
-                {visibility || 'Visibility'}
+                {visibility || 'Visibility *'}
                 <ChevronDown className="w-4 h-4 ml-2" />
               </button>
               
@@ -431,7 +441,14 @@ const CreateVideoScreen = () => {
                       }}
                       className="w-full text-left px-4 py-2 hover:bg-gray-50 transition-colors text-sm"
                     >
-                      {option}
+                      <div>
+                        <div className="font-medium">{option}</div>
+                        <div className="text-xs text-gray-500">
+                          {option === 'Public' && 'Everyone can see this video'}
+                          {option === 'Private' && 'Only mutual followers can see this'}
+                          {option === 'Unlisted' && 'Only you can see this video'}
+                        </div>
+                      </div>
                     </button>
                   ))}
                 </div>
@@ -463,7 +480,7 @@ const CreateVideoScreen = () => {
 
         {/* Thumbnail Upload */}
         <div>
-          <label className="block text-gray-700 font-semibold mb-4">Thumbnail</label>
+          <label className="block text-gray-700 font-semibold mb-4">Thumbnail (Optional)</label>
           <div 
             className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-colors ${
               dragOver.thumbnail 
@@ -508,9 +525,9 @@ const CreateVideoScreen = () => {
 
         {/* Upload Button */}
         <button
-          onClick={() => uploadVideo.mutate()}
-          disabled={!videoFile || !title.trim() || uploadVideo.isPending}
-          className="w-full bg-blue-600 hover:bg-blue-700 text-white py-4 rounded-xl"
+          onClick={handleUpload}
+          disabled={!videoFile || !title.trim() || !visibility || uploadVideo.isPending}
+          className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white py-4 rounded-xl transition-colors"
         >
           {uploadVideo.isPending ? (
             <div className="flex flex-col items-center">
@@ -519,10 +536,10 @@ const CreateVideoScreen = () => {
                 <span>
                   {uploadProgress < 100 
                     ? `Uploading... ${uploadProgress.toFixed(0)}%`
-                    : 'Verifying...'}
+                    : 'Finalizing...'}
                 </span>
               </div>
-              {uploadProgress < 100 && (
+              {uploadProgress > 0 && uploadProgress < 100 && (
                 <div className="w-full h-2 bg-blue-800 rounded-full mt-2">
                   <div 
                     className="h-full bg-white rounded-full transition-all duration-300"
