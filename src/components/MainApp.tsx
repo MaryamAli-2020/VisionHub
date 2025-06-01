@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import BottomNavigation from './BottomNavigation';
@@ -7,6 +6,11 @@ import VideoPlayer from './VideoPlayer';
 import ProfileScreen from './ProfileScreen';
 import CreateVideoScreen from './CreateVideoScreen';
 import LibraryScreen from './LibraryScreen';
+import SettingsScreen from './SettingsScreen';
+import { SavedArticlesScreen } from './settings/SavedArticlesScreen';
+import { LinkedAccountsScreen } from './settings/LinkedAccountsScreen';
+import { MobileNumberScreen } from './settings/MobileNumberScreen';
+import { NotificationsScreen } from './settings/NotificationsScreen';
 
 const MainApp = () => {
   const navigate = useNavigate();
@@ -21,6 +25,14 @@ const MainApp = () => {
           <Route path="/profile" element={<ProfileScreen />} />
           <Route path="/create" element={<CreateVideoScreen />} />
           <Route path="/library" element={<LibraryScreen />} />
+          <Route path="/profile-settings" element={<SettingsScreen />} />          <Route path="/saved-articles" element={<SavedArticlesScreen />} />
+          <Route path="/linked-accounts" element={<LinkedAccountsScreen />} />
+          <Route path="/mobile-number" element={<MobileNumberScreen />} />
+          <Route path="/notifications" element={<NotificationsScreen />} />
+          <Route path="/appearance" element={<SettingsScreen />} />
+          <Route path="/language" element={<SettingsScreen />} />
+          <Route path="/privacy-security" element={<SettingsScreen />} />
+          <Route path="/storage" element={<SettingsScreen />} />
         </Routes>
       </div>
       <BottomNavigation />

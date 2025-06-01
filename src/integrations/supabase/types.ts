@@ -9,6 +9,42 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      saved_articles: {
+        Row: {
+          id: string;
+          user_id: string;
+          title: string;
+          description: string | null;
+          article_url: string;
+          article_type: 'article' | 'tutorial' | 'news';
+          thumbnail_url: string | null;
+          created_at: string;
+          updated_at: string;
+        }
+        Insert: {
+          id?: string;
+          user_id: string;
+          title: string;
+          description?: string | null;
+          article_url: string;
+          article_type: string;
+          thumbnail_url?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        }
+        Update: {
+          id?: string;
+          user_id?: string;
+          title?: string;
+          description?: string | null;
+          article_url?: string;
+          article_type?: string;
+          thumbnail_url?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        }
+        Relationships: [];
+      }
       articles: {
         Row: {
           category: string | null
@@ -112,6 +148,41 @@ export type Database = {
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
+        ]
+      }
+      linked_accounts: {
+        Row: {
+          id: string
+          user_id: string
+          provider: string
+          provider_user_id: string
+          provider_account_data: Json
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          provider: string
+          provider_user_id: string
+          provider_account_data?: Json
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          provider?: string
+          provider_user_id?: string
+          provider_account_data?: Json
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "linked_accounts_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          }
         ]
       }
       post_comments: {
@@ -404,7 +475,7 @@ export type Tables<
   }
     ? keyof (Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
         Database[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never = never,
+    : never,
 > = DefaultSchemaTableNameOrOptions extends { schema: keyof Database }
   ? (Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
       Database[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {

@@ -1,6 +1,7 @@
 
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Home, Search, Plus, User, Video } from 'lucide-react';
+import { Home, Search, Plus, User, Video, Network, Earth } from 'lucide-react';
+import { Global } from 'recharts';
 
 const BottomNavigation = () => {
   const navigate = useNavigate();
@@ -22,13 +23,13 @@ const BottomNavigation = () => {
         </button>
         
         <button
-          onClick={() => navigate('/search')}
+          onClick={() => navigate('/profile')}
           className={`flex flex-col items-center p-2 ${
-            isActive('/search') ? 'text-red-500' : 'text-gray-500'
+            isActive('/profile') ? 'text-red-500' : 'text-gray-500'
           }`}
         >
-          <Search className="w-6 h-6" />
-          <span className="text-xs mt-1">Search</span>
+          <Earth className="w-6 h-6" />
+          <span className="text-xs mt-1">Network</span>
         </button>
         
         <button
@@ -50,11 +51,10 @@ const BottomNavigation = () => {
           <Video className="w-6 h-6" />
           <span className="text-xs mt-1">Library</span>
         </button>
-        
-        <button
-          onClick={() => navigate('/profile')}
+          <button
+          onClick={() => navigate('/profile-settings')}
           className={`flex flex-col items-center p-2 ${
-            isActive('/profile') ? 'text-red-500' : 'text-gray-500'
+            isActive('/profile-settings') ? 'text-red-500' : 'text-gray-500'
           }`}
         >
           <User className="w-6 h-6" />

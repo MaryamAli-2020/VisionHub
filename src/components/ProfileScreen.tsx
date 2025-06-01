@@ -3,14 +3,20 @@ import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { LogOut, Edit, Upload, Send, Image, Video, File, Users, MessageCircle, Plus, Play } from 'lucide-react';
-import { useState, useRef } from 'react';
+import { 
+  LogOut, Edit, Upload, Send, Image, Video, File, 
+  Users, MessageCircle, Plus, Play, MoreVertical,
+  PencilLine, Trash 
+} from 'lucide-react';
+import { useState, useRef, useEffect } from 'react';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
 import { Database } from '@/integrations/supabase/types';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { MoreVertical, Trash, PencilLine } from 'lucide-react';
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter 
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -45,6 +51,18 @@ const ProfileScreen = () => {
   const [selectedMediaType, setSelectedMediaType] = useState<'photo' | 'video' | 'file' | null>(null);
   const [editingPost, setEditingPost] = useState<EditingPost | null>(null);
   const [showEditDialog, setShowEditDialog] = useState(false);
+  const [showEditProfileDialog, setShowEditProfileDialog] = useState(false);
+  const [editProfileData, setEditProfileData] = useState<{
+    username: string;
+    full_name: string;
+    bio: string;
+    specialty: string;
+  }>({
+    username: '',
+    full_name: '',
+    bio: '',
+    specialty: ''
+  });
   const queryClient = useQueryClient();
 
   // Profile Query
@@ -300,6 +318,80 @@ const ProfileScreen = () => {
     }
   });
 
+  // Add updateProfile mutation
+  const updateProfile = useMutation({
+    mutationFn: async (data: {
+      username: string;
+      full_name: string;
+      bio: string;
+      specialty: string;
+    }) => {
+      if (!user?.id) throw new Error('User not authenticated');
+
+      // First check username uniqueness if it changed
+      if (data.username !== profile?.username) {
+        const { data: existingUser } = await supabase
+          .from('profiles')
+          .select('username')
+          .eq('username', data.username)
+          .single();
+
+        if (existingUser) {
+          throw new Error('Username already taken');
+        }
+      }
+
+      const { error } = await supabase
+        .from('profiles')
+        .update({
+          username: data.username,
+          full_name: data.full_name,
+          bio: data.bio,
+          specialty: data.specialty,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', user.id);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['profile', user?.id] });
+      setShowEditProfileDialog(false);
+      toast.success('Profile updated successfully!');
+    },
+    onError: (error: Error) => {
+      toast.error(`Failed to update profile: ${error.message}`);
+    }
+  });
+
+  // Set initial edit data when profile loads
+  const { data: profileForEdit } = useQuery({
+    queryKey: ['profile', user?.id],
+    queryFn: async () => {
+      if (!user?.id) return null;
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', user.id)
+        .single();
+      
+      if (error) throw error;
+      return data;
+    }
+  });
+
+  // Update editProfileData when profileForEdit changes
+  useEffect(() => {
+    if (profileForEdit) {
+      setEditProfileData({
+        username: profileForEdit.username || '',
+        full_name: profileForEdit.full_name || '',
+        bio: profileForEdit.bio || '',
+        specialty: profileForEdit.specialty || ''
+      });
+    }
+  }, [profileForEdit]);
+
   // Fix file input accessibility
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -333,6 +425,16 @@ const ProfileScreen = () => {
     setShowMediaDialog(true);
   };
 
+  // Add handleEditProfile function
+  const handleEditProfile = () => {
+    setShowEditProfileDialog(true);
+  };
+
+  // Add handleUpdateProfile function
+  const handleUpdateProfile = async () => {
+    await updateProfile.mutateAsync(editProfileData);
+  };
+
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -351,22 +453,8 @@ const ProfileScreen = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Professional Header */}
-      <div className="bg-white border-b border-gray-200 sticky top-0 z-50 shadow-sm">
-        <div className="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center">
-          <div className="flex items-center space-x-4">
-            <h1 className="text-2xl font-semibold text-gray-900">Profile</h1>
-          </div>
-          <Button
-            onClick={handleSignOut}
-            variant="outline"
-            className="border-gray-300 text-gray-700 hover:bg-gray-50 hover:border-gray-400 transition-colors"
-          >
-            <LogOut className="w-4 h-4 mr-2" />
-            Sign Out
-          </Button>
-        </div>
-      </div>
+      {/* Header */}
+      
 
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-6 py-8">
@@ -427,7 +515,7 @@ const ProfileScreen = () => {
         {/* Action Buttons */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
           <Button 
-            onClick={() => setIsEditing(!isEditing)} 
+            onClick={handleEditProfile} 
             className="bg-slate-800 hover:bg-slate-700 text-white py-3 h-12 rounded-xl font-medium transition-colors shadow-sm"
           >
             <Edit className="w-5 h-5 mr-2" />
@@ -794,6 +882,67 @@ const ProfileScreen = () => {
                 </Button>
               </div>
             </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Edit Profile Dialog */}
+        <Dialog open={showEditProfileDialog} onOpenChange={setShowEditProfileDialog}>
+          <DialogContent className="sm:max-w-[425px]">
+            <DialogHeader>
+              <DialogTitle>Edit Profile</DialogTitle>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+              <div className="grid gap-2">
+                <Label htmlFor="username">Username</Label>
+                <Input
+                  id="username"
+                  value={editProfileData.username}
+                  onChange={(e) => setEditProfileData(prev => ({ ...prev, username: e.target.value }))}
+                  placeholder="Enter username"
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="fullName">Full Name</Label>
+                <Input
+                  id="fullName"
+                  value={editProfileData.full_name}
+                  onChange={(e) => setEditProfileData(prev => ({ ...prev, full_name: e.target.value }))}
+                  placeholder="Enter full name"
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="specialty">Specialty</Label>
+                <Input
+                  id="specialty"
+                  value={editProfileData.specialty}
+                  onChange={(e) => setEditProfileData(prev => ({ ...prev, specialty: e.target.value }))}
+                  placeholder="Enter your specialty"
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="bio">Bio</Label>
+                <Textarea
+                  id="bio"
+                  value={editProfileData.bio}
+                  onChange={(e) => setEditProfileData(prev => ({ ...prev, bio: e.target.value }))}
+                  placeholder="Tell us about yourself"
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setShowEditProfileDialog(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleUpdateProfile}
+                disabled={updateProfile.isPending}
+              >
+                {updateProfile.isPending ? 'Saving...' : 'Save Changes'}
+              </Button>
+            </DialogFooter>
           </DialogContent>
         </Dialog>
       </div>
