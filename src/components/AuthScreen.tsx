@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Eye, EyeOff, User, Lock, Mail } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
+import { Logo } from "@/components/ui/logo";
 
 const AuthScreen = () => {
   const [isLogin, setIsLogin] = useState(true);
@@ -52,6 +53,9 @@ const AuthScreen = () => {
         <div className="w-full max-w-md space-y-8">
           {/* Header */}
           <div className="text-center space-y-4">
+            <div className="flex flex-col items-center max-w-md w-full space-y-8">
+            <Logo size="lg" />
+    </div>
             <h1 className="text-4xl font-bold text-white">
               {isLogin ? 'WELCOME TO' : 'JOIN'}
             </h1>
