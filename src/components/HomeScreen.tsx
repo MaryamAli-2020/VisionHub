@@ -34,11 +34,13 @@ const HomeScreen = () => {
   const { data: videos, isLoading } = useQuery<Video[]>({
     queryKey: ['videos', searchQuery, sortBy, category],
     queryFn: async () => {
+      console.log('Fetching videos with query params:', { searchQuery, sortBy, category });
+      
       let query = supabase
         .from('videos')
         .select(`
           *,
-          profiles!videos_user_id_fkey (
+          profiles (
             id,
             full_name,
             avatar_url,
@@ -74,14 +76,16 @@ const HomeScreen = () => {
       }
 
       const { data, error } = await query;
-      if (error) throw error;
+      
+      if (error) {
+        console.error('Video query error:', error);
+        throw error;
+      }
+
+      console.log('Videos fetched:', data?.length || 0);
       
       return (data ?? []).map((video) => {
-        if (
-          !video.profiles ||
-          typeof video.profiles !== 'object' ||
-          ('error' in (video.profiles ?? {}))
-        ) {
+        if (!video.profiles || typeof video.profiles !== 'object' || Array.isArray(video.profiles)) {
           return { ...video, profiles: null };
         }
         return video as Video;
@@ -250,7 +254,11 @@ const HomeScreen = () => {
               ) : videos && videos.length > 0 ? (
                 <div className="grid grid-cols-1 gap-6">
                   {videos.map((video) => (
-                    <div key={video.id} className="bg-white rounded-xl border border-gray-100 overflow-hidden">
+                    <div 
+                      key={video.id} 
+                      className="bg-white rounded-xl border border-gray-100 overflow-hidden cursor-pointer hover:shadow-lg transition-shadow"
+                      onClick={() => navigate(`/video/${video.id}`)}
+                    >
                       {/* Video Thumbnail/Player */}
                       <div className="relative">
                         {video.thumbnail_url ? (
@@ -269,6 +277,15 @@ const HomeScreen = () => {
                             {Math.floor(video.duration / 60)}:{(video.duration % 60).toString().padStart(2, '0')}
                           </span>
                         )}
+                        <div className="absolute top-2 left-2">
+                          <span className={`px-2 py-1 rounded text-xs font-medium ${
+                            video.visibility === 'public' ? 'bg-green-100 text-green-800' :
+                            video.visibility === 'private' ? 'bg-blue-100 text-blue-800' :
+                            'bg-gray-100 text-gray-800'
+                          }`}>
+                            {video.visibility}
+                          </span>
+                        </div>
                       </div>
                       
                       {/* Video Info */}
@@ -311,6 +328,7 @@ const HomeScreen = () => {
               ) : (
                 <div className="text-center py-8">
                   <p className="text-gray-500">No videos available.</p>
+                  <p className="text-sm text-gray-400 mt-2">Be the first to share something!</p>
                 </div>
               )}
             </div>

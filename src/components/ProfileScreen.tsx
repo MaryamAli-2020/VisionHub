@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { LogOut, Edit, Upload, Send, Image, Video, File, Users, MessageCircle, Plus } from 'lucide-react';
+import { LogOut, Edit, Upload, Send, Image, Video, File, Users, MessageCircle, Plus, Play } from 'lucide-react';
 import { useState, useRef } from 'react';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -20,6 +20,7 @@ import {
 
 type Profile = Database['public']['Tables']['profiles']['Row'];
 type Post = Database['public']['Tables']['posts']['Row'];
+type VideoType = Database['public']['Tables']['videos']['Row'];
 
 type FollowWithProfile = Database['public']['Tables']['follows']['Row'] & {
   following_profile: Profile;
@@ -102,6 +103,22 @@ const ProfileScreen = () => {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('posts')
+        .select('*')
+        .eq('user_id', user?.id)
+        .order('created_at', { ascending: false });
+      
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!user?.id
+  });
+
+  // Add videos query
+  const { data: userVideos } = useQuery<VideoType[]>({
+    queryKey: ['user-videos', user?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('videos')
         .select('*')
         .eq('user_id', user?.id)
         .order('created_at', { ascending: false });
@@ -434,8 +451,8 @@ const ProfileScreen = () => {
           </Button>
         </div>
 
-        {/* Two Column Layout */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        {/* Three Column Layout */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Connections Card */}
           <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
             <div className="flex items-center justify-between mb-6">
@@ -527,6 +544,77 @@ const ProfileScreen = () => {
                   )}
                 </Button>
               </div>
+            </div>
+          </div>
+
+          {/* My Videos Card */}
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-xl font-semibold text-gray-900 flex items-center">
+                <Video className="w-5 h-5 mr-2 text-gray-600" />
+                My Videos
+              </h2>
+              <span className="bg-slate-100 text-slate-700 px-3 py-1 rounded-full text-sm font-medium">
+                {userVideos?.length ?? 0}
+              </span>
+            </div>
+            <div className="space-y-3 max-h-80 overflow-y-auto">
+              {userVideos?.length === 0 ? (
+                <div className="text-center py-8 text-gray-500">
+                  <Video className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+                  <p>No videos yet</p>
+                  <Button 
+                    onClick={() => navigate('/create')}
+                    className="mt-3 text-sm"
+                    size="sm"
+                  >
+                    Create your first video
+                  </Button>
+                </div>
+              ) : (
+                userVideos?.map((video) => (
+                  <div key={video.id} className="flex items-start space-x-3 p-3 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer"
+                       onClick={() => navigate(`/video/${video.id}`)}>
+                    <div className="relative flex-shrink-0">
+                      {video.thumbnail_url ? (
+                        <img
+                          src={video.thumbnail_url}
+                          alt={video.title}
+                          className="w-16 h-12 rounded object-cover"
+                        />
+                      ) : (
+                        <div className="w-16 h-12 bg-gray-200 rounded flex items-center justify-center">
+                          <Play className="w-4 h-4 text-gray-400" />
+                        </div>
+                      )}
+                      <div className="absolute top-1 left-1">
+                        <span className={`px-1 py-0.5 rounded text-xs font-medium ${
+                          video.visibility === 'public' ? 'bg-green-100 text-green-800' :
+                          video.visibility === 'private' ? 'bg-blue-100 text-blue-800' :
+                          'bg-gray-100 text-gray-800'
+                        }`}>
+                          {video.visibility}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-gray-900 truncate text-sm">
+                        {video.title}
+                      </p>
+                      <div className="flex items-center space-x-2 text-xs text-gray-500 mt-1">
+                        <span>{video.views_count || 0} views</span>
+                        <span>•</span>
+                        <span>{new Date(video.created_at).toLocaleDateString()}</span>
+                      </div>
+                      {video.category && (
+                        <p className="text-xs text-gray-500 capitalize mt-1">
+                          {video.category}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           </div>
         </div>

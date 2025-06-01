@@ -1,60 +1,65 @@
+
 import { useNavigate, useLocation } from 'react-router-dom';
-import { User, Plus, Tv, Globe, BookOpen } from 'lucide-react';
+import { Home, Search, Plus, User, Video } from 'lucide-react';
 
 const BottomNavigation = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const tabs = [
-    { id: 'streaming', label: '', path: '/', icon: Tv },
-    { id: 'network', label: '', path: '/network', icon: Globe },
-    { id: 'create', label: '', path: '/create', icon: Plus },
-    { id: 'library', label: '', path: '/library', icon: BookOpen },
-    { id: 'profile', label: '', path: '/profile', icon: User },
-  ];
+  const isActive = (path: string) => location.pathname === path;
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-gray-200 shadow-lg">
-      <div className="flex items-center justify-between max-w-md mx-auto px-6 py-3">
-        {tabs.map((tab) => {
-          const isActive = location.pathname === tab.path;
-          const IconComponent = tab.icon;
-          
-          if (tab.id === 'create') {
-            return (
-              <button
-                key={tab.id}
-                onClick={() => navigate(tab.path)}
-                className="w-14 h-14 bg-gradient-to-r from-teal-500 to-cyan-500 rounded-full flex items-center justify-center shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105"
-                title="Create"
-                aria-label="Create"
-              >
-                <IconComponent className="w-7 h-7 text-white" strokeWidth={2.5} />
-              </button>
-            );
-          }
-
-          return (
-            <button
-              key={tab.id}
-              onClick={() => navigate(tab.path)}
-              className={`flex flex-col items-center space-y-1.5 px-4 py-2 rounded-lg transition-all duration-200 min-w-0 ${
-                isActive 
-                  ? 'text-teal-600 bg-teal-50' 
-                  : 'text-gray-600 hover:text-gray-800 hover:bg-gray-50'
-              }`}
-            >
-              <IconComponent 
-                className={`w-6 h-6 ${isActive ? 'stroke-2' : 'stroke-1.5'}`}
-              />
-              <span className={`text-xs font-medium leading-tight text-center ${
-                isActive ? 'font-semibold' : 'font-normal'
-              }`}>
-                {tab.label}
-              </span>
-            </button>
-          );
-        })}
+    <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 px-6 py-2 z-50">
+      <div className="flex justify-around items-center">
+        <button
+          onClick={() => navigate('/')}
+          className={`flex flex-col items-center p-2 ${
+            isActive('/') ? 'text-red-500' : 'text-gray-500'
+          }`}
+        >
+          <Home className="w-6 h-6" />
+          <span className="text-xs mt-1">Home</span>
+        </button>
+        
+        <button
+          onClick={() => navigate('/search')}
+          className={`flex flex-col items-center p-2 ${
+            isActive('/search') ? 'text-red-500' : 'text-gray-500'
+          }`}
+        >
+          <Search className="w-6 h-6" />
+          <span className="text-xs mt-1">Search</span>
+        </button>
+        
+        <button
+          onClick={() => navigate('/create')}
+          className={`flex flex-col items-center p-2 ${
+            isActive('/create') ? 'text-red-500' : 'text-gray-500'
+          }`}
+        >
+          <Plus className="w-6 h-6" />
+          <span className="text-xs mt-1">Create</span>
+        </button>
+        
+        <button
+          onClick={() => navigate('/library')}
+          className={`flex flex-col items-center p-2 ${
+            isActive('/library') ? 'text-red-500' : 'text-gray-500'
+          }`}
+        >
+          <Video className="w-6 h-6" />
+          <span className="text-xs mt-1">Library</span>
+        </button>
+        
+        <button
+          onClick={() => navigate('/profile')}
+          className={`flex flex-col items-center p-2 ${
+            isActive('/profile') ? 'text-red-500' : 'text-gray-500'
+          }`}
+        >
+          <User className="w-6 h-6" />
+          <span className="text-xs mt-1">Profile</span>
+        </button>
       </div>
     </div>
   );

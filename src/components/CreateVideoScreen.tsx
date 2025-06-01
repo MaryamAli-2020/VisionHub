@@ -232,12 +232,24 @@ const CreateVideoScreen = () => {
     onSuccess: (data) => {
       console.log('Upload successful:', data);
       toast.success(`Video uploaded successfully! Visibility: ${data.visibility}`);
-      // Navigate back to home to see the video (if public) or to profile (if private/unlisted)
+      
+      // Navigate based on visibility
       if (data.visibility === 'public') {
-        navigate('/');
+        // For public videos, go to home page to see the video
+        navigate('/', { replace: true });
       } else {
-        navigate('/profile');
+        // For private/unlisted videos, go to profile to see the video
+        navigate('/profile', { replace: true });
       }
+      
+      // Reset form
+      setTitle('');
+      setDescription('');
+      setSelectedTags([]);
+      setCategory('');
+      setVisibility('');
+      setVideoFile(null);
+      setThumbnailFile(null);
     },
     onError: (error: Error) => {
       console.error('Upload failed:', error);
