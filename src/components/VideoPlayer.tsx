@@ -29,7 +29,12 @@ const VideoPlayer = () => {
     <div className="min-h-screen bg-white">
       {/* Header */}
       <div className="flex items-center justify-between p-6 pt-12">
-        <button onClick={() => navigate(-1)} className="p-2">
+        <button
+          onClick={() => navigate(-1)}
+          className="p-2"
+          aria-label="Go back"
+          title="Go back"
+        >
           <ChevronLeft className="w-6 h-6" />
         </button>
         <h1 className="text-lg font-semibold">Andy William Live</h1>

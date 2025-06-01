@@ -125,7 +125,12 @@ const AuthScreen = () => {
 
             {!isLogin && !isUserType && (
               <div className="relative">
+                <label htmlFor="specialty-select" className="sr-only">
+                  Select your speciality
+                </label>
                 <select
+                  id="specialty-select"
+                  aria-label="Select your speciality"
                   value={specialty}
                   onChange={(e) => setSpecialty(e.target.value)}
                   className="w-full pl-4 pr-12 py-4 bg-white/10 border border-white/20 text-white rounded-xl backdrop-blur-sm appearance-none"

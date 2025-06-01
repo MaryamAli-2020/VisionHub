@@ -1,24 +1,273 @@
-
-import { useState } from 'react';
+import { useState, useRef } from 'react';
+import { ChevronLeft, Upload, X, ChevronDown } from 'lucide-react';
+import { useAuth } from '@/hooks/useAuth';
+import { useMutation } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
-import { ChevronLeft } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
+import { Database } from '@/integrations/supabase/types';
+import { verifyVideoUpload } from '@/utils/videoUtils';
 
 const CreateVideoScreen = () => {
+  const { user } = useAuth();
   const navigate = useNavigate();
+  
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [tags, setTags] = useState('');
+  const [selectedTags, setSelectedTags] = useState([]);
   const [category, setCategory] = useState('');
   const [visibility, setVisibility] = useState('');
+  const [videoFile, setVideoFile] = useState(null);
+  const [thumbnailFile, setThumbnailFile] = useState(null);
+  const [showTagsDropdown, setShowTagsDropdown] = useState(false);
+  const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
+  const [showVisibilityDropdown, setShowVisibilityDropdown] = useState(false);
+  const [dragOver, setDragOver] = useState({ video: false, thumbnail: false });
+  const [uploadProgress, setUploadProgress] = useState(0);
+
+  const videoInputRef = useRef(null);
+  const thumbnailInputRef = useRef(null);
+
+  const availableTags = ['Gaming', 'Music', 'Education', 'Entertainment', 'Sports', 'Technology', 'Comedy', 'News'];
+  const categories = ['Gaming', 'Music', 'Education', 'Entertainment', 'Sports', 'Technology', 'Comedy', 'News', 'Vlogs'];
+  const visibilityOptions = ['Public', 'Unlisted', 'Private'];
+
+  const handleVideoUpload = (file) => {
+    if (file && file.size <= 120 * 1024 * 1024) { // 120MB limit
+      setVideoFile(file);
+    } else {
+      alert('File size exceeds 120MB limit');
+    }
+  };
+
+  const handleThumbnailUpload = (file) => {
+    if (file && file.size <= 25 * 1024 * 1024) { // 25MB limit
+      setThumbnailFile(file);
+    } else {
+      alert('File size exceeds 25MB limit');
+    }
+  };
+
+  const handleDragOver = (e, type) => {
+    e.preventDefault();
+    setDragOver(prev => ({ ...prev, [type]: true }));
+  };
+
+  const handleDragLeave = (e, type) => {
+    e.preventDefault();
+    setDragOver(prev => ({ ...prev, [type]: false }));
+  };
+
+  const handleDrop = (e, type) => {
+    e.preventDefault();
+    setDragOver(prev => ({ ...prev, [type]: false }));
+    const files = e.dataTransfer.files;
+    if (files.length > 0) {
+      const file = files[0];
+      if (type === 'video') {
+        handleVideoUpload(file);
+      } else {
+        handleThumbnailUpload(file);
+      }
+    }
+  };
+
+  const toggleTag = (tag) => {
+    setSelectedTags(prev => 
+      prev.includes(tag) 
+        ? prev.filter(t => t !== tag)
+        : [...prev, tag]
+    );
+  };
+
+  const removeTag = (tag) => {
+    setSelectedTags(prev => prev.filter(t => t !== tag));
+  };
+
+  const formatFileSize = (bytes) => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  };
+
+  // Update the uploadVideo mutation
+  const uploadVideo = useMutation({
+    mutationFn: async () => {
+      if (!user?.id || !videoFile || !title.trim()) {
+        throw new Error('Missing required fields');
+      }
+
+      // Declare data outside try-catch for access in both
+      let data: any = undefined;
+
+      try {
+        // 1. Initialize upload
+        const result = await supabase.rpc('begin_video_upload', {
+          video_title: title,
+          video_description: description || '',
+          video_visibility: visibility.toLowerCase() || 'public'
+        });
+        data = result.data;
+        const txError = result.error;
+
+        if (txError || !data?.videoId) {
+          console.error('Upload initialization failed:', txError);
+          throw new Error('Failed to initialize video upload');
+        }
+
+        const videoId = data.videoId;
+        console.log('Video ID created:', videoId);
+
+        // 2. Upload video with progress tracking
+        const videoFileName = `${user.id}/${videoId}/${Date.now()}-${videoFile.name}`;
+        
+        // Create upload options with progress tracking
+        const options = {
+          cacheControl: '3600',
+          upsert: false
+        };
+
+        // Create FormData for progress tracking
+        const formData = new FormData();
+        formData.append('file', videoFile);
+
+        // Manual upload with progress tracking
+        // Get the current session to retrieve the access token
+        const { data: sessionData } = await supabase.auth.getSession();
+        const accessToken = sessionData?.session?.access_token;
+
+        const uploadResponse = await fetch(
+          `${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/videos/${videoFileName}`,
+          {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${accessToken}`,
+            },
+            body: formData
+          }
+        );
+
+        if (!uploadResponse.ok) {
+          throw new Error('Video upload failed');
+        }
+
+        // 3. Get video URL
+        const { data: { publicUrl: videoUrl } } = supabase.storage
+          .from('videos')
+          .getPublicUrl(videoFileName);
+
+        // 4. Update video record with URL and metadata
+        const { error: updateError } = await supabase
+          .from('videos')
+          .update({
+            video_url: videoUrl,
+            category: category || null,
+            tags: selectedTags,
+            is_published: true,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', videoId);
+
+        if (updateError) {
+          throw updateError;
+        }
+
+        // 5. Upload thumbnail if exists
+        let thumbnailUrl = null;
+        if (thumbnailFile) {
+          const thumbnailFileName = `${user.id}/${videoId}/${Date.now()}-${thumbnailFile.name}`;
+          const { error: thumbnailError } = await supabase.storage
+            .from('thumbnails')
+            .upload(thumbnailFileName, thumbnailFile, {
+              cacheControl: '3600',
+              upsert: false
+            });
+
+          if (thumbnailError) throw thumbnailError;
+
+          const { data: { publicUrl: thumbUrl } } = supabase.storage
+            .from('thumbnails')
+            .getPublicUrl(thumbnailFileName);
+
+          thumbnailUrl = thumbUrl;
+
+          // Update video with thumbnail
+          await supabase
+            .from('videos')
+            .update({ thumbnail_url: thumbnailUrl })
+            .eq('id', videoId);
+        }
+
+        // 6. Verify the upload with progressive retries
+        let retries = 5;
+        let isVerified = false;
+        
+        for (let i = 0; i < retries && !isVerified; i++) {
+          console.log(`Verification attempt ${i + 1}/${retries}`);
+          
+          // Increase wait time with each retry
+          await new Promise(resolve => setTimeout(resolve, 2000 * (i + 1)));
+          
+          isVerified = await verifyVideoUpload(videoId);
+          
+          if (isVerified) {
+            console.log('Video verified successfully');
+            break;
+          }
+        }
+
+        if (!isVerified) {
+          throw new Error('Video upload verification failed after multiple attempts');
+        }
+
+        return { videoId, videoUrl, thumbnailUrl };
+      } catch (error) {
+        console.error('Upload process failed:', error);
+        // Attempt cleanup on failure
+        if (data?.videoId) {
+          await supabase.from('videos').delete().eq('id', data.videoId);
+        }
+        throw error;
+      }
+    },
+    onSuccess: (data) => {
+      toast.success('Video uploaded successfully!');
+      navigate(`/videos/${data.videoId}`);
+    },
+    onError: (error: Error) => {
+      toast.error(`Upload failed: ${error.message}`);
+      setUploadProgress(0);
+    }
+  });
+
+  const handleUpload = async () => {
+    if (!videoFile) {
+      toast.error('Please select a video file');
+      return;
+    }
+    if (!title.trim()) {
+      toast.error('Please enter a video title');
+      return;
+    }
+    
+    try {
+      await uploadVideo.mutateAsync();
+    } catch (error) {
+      console.error('Upload failed:', error);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-white">
       {/* Header */}
       <div className="flex items-center justify-between p-6 pt-12 border-b border-gray-100">
-        <button onClick={() => navigate(-1)} className="p-2">
+        <button 
+          onClick={() => window.history.back()} 
+          className="p-2 hover:bg-gray-100 rounded-lg transition-colors" 
+          title="Go back"
+        >
           <ChevronLeft className="w-6 h-6" />
         </button>
         <h1 className="text-lg font-semibold">Create Video</h1>
@@ -27,74 +276,278 @@ const CreateVideoScreen = () => {
 
       <div className="p-6 space-y-8">
         {/* Video Upload */}
-        <div className="border-2 border-dashed border-gray-300 rounded-xl p-8 text-center">
+        <div 
+          className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-colors ${
+            dragOver.video 
+              ? 'border-red-400 bg-red-50' 
+              : videoFile 
+                ? 'border-green-400 bg-green-50' 
+                : 'border-gray-300 hover:border-red-400'
+          }`}
+          onClick={() => videoInputRef.current?.click()}
+          onDragOver={(e) => handleDragOver(e, 'video')}
+          onDragLeave={(e) => handleDragLeave(e, 'video')}
+          onDrop={(e) => handleDrop(e, 'video')}
+        >
+          <input
+            ref={videoInputRef}
+            type="file"
+            accept="video/*"
+            onChange={(e) => e.target.files[0] && handleVideoUpload(e.target.files[0])}
+            className="hidden"
+            title="Upload video file"
+            placeholder="Select a video file"
+          />
           <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <span className="text-red-500 text-2xl">📁</span>
+            <Upload className="w-8 h-8 text-red-500" />
           </div>
-          <p className="text-gray-600 mb-2">
-            <span className="text-red-500 font-semibold">Click to Upload</span> or drag and drop
-          </p>
-          <p className="text-gray-400 text-sm">(Max. File size: 120 MB)</p>
+          {videoFile ? (
+            <div>
+              <p className="text-green-600 font-semibold mb-2">✓ Video Selected</p>
+              <p className="text-gray-600 text-sm">{videoFile.name}</p>
+              <p className="text-gray-400 text-xs">{formatFileSize(videoFile.size)}</p>
+            </div>
+          ) : (
+            <div>
+              <p className="text-gray-600 mb-2">
+                <span className="text-red-500 font-semibold">Click to Upload</span> or drag and drop
+              </p>
+              <p className="text-gray-400 text-sm">(Max. File size: 120 MB)</p>
+            </div>
+          )}
         </div>
 
         {/* Video Details */}
         <div className="space-y-6">
           <div>
-            <label className="block text-gray-700 font-semibold mb-2">Video title</label>
-            <Input
-              placeholder="Title"
+            <label className="block text-gray-700 font-semibold mb-2">Video title *</label>
+            <input
+              type="text"
+              placeholder="Enter video title"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              className="rounded-xl"
+              className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
             />
           </div>
 
           <div>
             <label className="block text-gray-700 font-semibold mb-2">Description</label>
-            <Textarea
-              placeholder="Description"
+            <textarea
+              placeholder="Describe your video..."
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              className="rounded-xl min-h-[120px] resize-none"
+              className="w-full px-4 py-3 border border-gray-300 rounded-xl min-h-[120px] resize-none focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
             />
           </div>
 
           {/* Tags, Category, Visibility */}
-          <div className="flex space-x-4">
-            <Button variant="outline" className="rounded-xl relative">
-              Tags
-              <span className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center">
-                2
-              </span>
-            </Button>
-            <Button variant="outline" className="rounded-xl">
-              Category ↓
-            </Button>
-            <Button variant="outline" className="rounded-xl">
-              Visibility ↓
-            </Button>
+          <div className="flex flex-wrap gap-4">
+            {/* Tags Dropdown */}
+            <div className="relative">
+              <button
+                onClick={() => setShowTagsDropdown(!showTagsDropdown)}
+                className="flex items-center px-4 py-2 border border-gray-300 rounded-xl hover:bg-gray-50 transition-colors relative"
+              >
+                Tags
+                {selectedTags.length > 0 && (
+                  <span className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center">
+                    {selectedTags.length}
+                  </span>
+                )}
+                <ChevronDown className="w-4 h-4 ml-2" />
+              </button>
+              
+              {showTagsDropdown && (
+                <div className="absolute top-full left-0 mt-2 w-64 bg-white border border-gray-200 rounded-xl shadow-lg z-10 p-4">
+                  <div className="space-y-2">
+                    {availableTags.map(tag => (
+                      <label key={tag} className="flex items-center space-x-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={selectedTags.includes(tag)}
+                          onChange={() => toggleTag(tag)}
+                          className="w-4 h-4 text-red-500 rounded focus:ring-red-500"
+                        />
+                        <span className="text-sm">{tag}</span>
+                      </label>
+                    ))}
+                  </div>
+                  <button
+                    onClick={() => setShowTagsDropdown(false)}
+                    className="w-full mt-3 px-3 py-2 bg-red-500 text-white rounded-lg text-sm hover:bg-red-600 transition-colors"
+                  >
+                    Done
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Category Dropdown */}
+            <div className="relative">
+              <button
+                onClick={() => setShowCategoryDropdown(!showCategoryDropdown)}
+                className="flex items-center px-4 py-2 border border-gray-300 rounded-xl hover:bg-gray-50 transition-colors"
+              >
+                {category || 'Category'}
+                <ChevronDown className="w-4 h-4 ml-2" />
+              </button>
+              
+              {showCategoryDropdown && (
+                <div className="absolute top-full left-0 mt-2 w-48 bg-white border border-gray-200 rounded-xl shadow-lg z-10 py-2">
+                  {categories.map(cat => (
+                    <button
+                      key={cat}
+                      onClick={() => {
+                        setCategory(cat);
+                        setShowCategoryDropdown(false);
+                      }}
+                      className="w-full text-left px-4 py-2 hover:bg-gray-50 transition-colors text-sm"
+                    >
+                      {cat}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Visibility Dropdown */}
+            <div className="relative">
+              <button
+                onClick={() => setShowVisibilityDropdown(!showVisibilityDropdown)}
+                className="flex items-center px-4 py-2 border border-gray-300 rounded-xl hover:bg-gray-50 transition-colors"
+              >
+                {visibility || 'Visibility'}
+                <ChevronDown className="w-4 h-4 ml-2" />
+              </button>
+              
+              {showVisibilityDropdown && (
+                <div className="absolute top-full left-0 mt-2 w-48 bg-white border border-gray-200 rounded-xl shadow-lg z-10 py-2">
+                  {visibilityOptions.map(option => (
+                    <button
+                      key={option}
+                      onClick={() => {
+                        setVisibility(option);
+                        setShowVisibilityDropdown(false);
+                      }}
+                      className="w-full text-left px-4 py-2 hover:bg-gray-50 transition-colors text-sm"
+                    >
+                      {option}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
+
+          {/* Selected Tags Display */}
+          {selectedTags.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {selectedTags.map(tag => (
+                <span
+                  key={tag}
+                  className="inline-flex items-center px-3 py-1 bg-red-100 text-red-700 rounded-full text-sm"
+                >
+                  {tag}
+                  <button
+                    onClick={() => removeTag(tag)}
+                    className="ml-2 w-4 h-4 text-red-500 hover:text-red-700"
+                    title={`Remove tag ${tag}`}
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Thumbnail Upload */}
         <div>
           <label className="block text-gray-700 font-semibold mb-4">Thumbnail</label>
-          <div className="border-2 border-dashed border-gray-300 rounded-xl p-8 text-center">
+          <div 
+            className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-colors ${
+              dragOver.thumbnail 
+                ? 'border-red-400 bg-red-50' 
+                : thumbnailFile 
+                  ? 'border-green-400 bg-green-50' 
+                  : 'border-gray-300 hover:border-red-400'
+            }`}
+            onClick={() => thumbnailInputRef.current?.click()}
+            onDragOver={(e) => handleDragOver(e, 'thumbnail')}
+            onDragLeave={(e) => handleDragLeave(e, 'thumbnail')}
+            onDrop={(e) => handleDrop(e, 'thumbnail')}
+          >
+            <input
+              ref={thumbnailInputRef}
+              type="file"
+              accept="image/*"
+              onChange={(e) => e.target.files[0] && handleThumbnailUpload(e.target.files[0])}
+              className="hidden"
+              title="Upload thumbnail image"
+              placeholder="Select a thumbnail image"
+            />
             <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <span className="text-red-500 text-2xl">📁</span>
+              <Upload className="w-8 h-8 text-red-500" />
             </div>
-            <p className="text-gray-600 mb-2">
-              <span className="text-red-500 font-semibold">Click to Upload</span> or drag and drop
-            </p>
-            <p className="text-gray-400 text-sm">(Max. File size: 25 MB)</p>
+            {thumbnailFile ? (
+              <div>
+                <p className="text-green-600 font-semibold mb-2">✓ Thumbnail Selected</p>
+                <p className="text-gray-600 text-sm">{thumbnailFile.name}</p>
+                <p className="text-gray-400 text-xs">{formatFileSize(thumbnailFile.size)}</p>
+              </div>
+            ) : (
+              <div>
+                <p className="text-gray-600 mb-2">
+                  <span className="text-red-500 font-semibold">Click to Upload</span> or drag and drop
+                </p>
+                <p className="text-gray-400 text-sm">(Max. File size: 25 MB)</p>
+              </div>
+            )}
           </div>
         </div>
 
         {/* Upload Button */}
-        <Button className="w-full bg-teal-400 hover:bg-teal-500 text-white py-4 rounded-xl text-lg font-semibold">
-          Upload Video
-        </Button>
+        <button
+          onClick={() => uploadVideo.mutate()}
+          disabled={!videoFile || !title.trim() || uploadVideo.isPending}
+          className="w-full bg-blue-600 hover:bg-blue-700 text-white py-4 rounded-xl"
+        >
+          {uploadVideo.isPending ? (
+            <div className="flex flex-col items-center">
+              <div className="flex items-center space-x-2">
+                <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                <span>
+                  {uploadProgress < 100 
+                    ? `Uploading... ${uploadProgress.toFixed(0)}%`
+                    : 'Verifying...'}
+                </span>
+              </div>
+              {uploadProgress < 100 && (
+                <div className="w-full h-2 bg-blue-800 rounded-full mt-2">
+                  <div 
+                    className="h-full bg-white rounded-full transition-all duration-300"
+                    style={{ width: `${uploadProgress}%` }}
+                  />
+                </div>
+              )}
+            </div>
+          ) : (
+            'Upload Video'
+          )}
+        </button>
       </div>
+
+      {/* Click outside to close dropdowns */}
+      {(showTagsDropdown || showCategoryDropdown || showVisibilityDropdown) && (
+        <div 
+          className="fixed inset-0 z-5"
+          onClick={() => {
+            setShowTagsDropdown(false);
+            setShowCategoryDropdown(false);
+            setShowVisibilityDropdown(false);
+          }}
+        />
+      )}
     </div>
   );
 };
