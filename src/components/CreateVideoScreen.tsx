@@ -1,3 +1,4 @@
+
 import { useState, useRef } from 'react';
 import { ChevronLeft, Upload, X, ChevronDown } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
@@ -92,42 +93,48 @@ const CreateVideoScreen = () => {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
-  // Updated uploadVideo mutation with proper visibility handling
+  // Fixed uploadVideo mutation with proper data saving
   const uploadVideo = useMutation({
     mutationFn: async () => {
       if (!user?.id || !videoFile || !title.trim()) {
         throw new Error('Missing required fields');
       }
 
-      console.log('Starting video upload...');
+      console.log('Starting video upload process...');
       setUploadProgress(10);
 
-      let data: any = undefined;
-
+      const visibilityValue = visibility.toLowerCase() || 'public';
+      const mutualFollowersOnly = visibilityValue === 'private';
+      
       try {
-        // 1. Initialize upload with proper visibility mapping
-        const visibilityValue = visibility.toLowerCase() || 'public';
-        const mutualFollowersOnly = visibilityValue === 'private';
-        
-        const result = await supabase.rpc('begin_video_upload', {
-          video_title: title,
-          video_description: description || '',
-          video_visibility: visibilityValue
-        });
-        
-        data = result.data;
-        const txError = result.error;
+        // 1. Create video record first
+        console.log('Creating video record...');
+        const { data: videoData, error: createError } = await supabase
+          .from('videos')
+          .insert({
+            user_id: user.id,
+            title: title.trim(),
+            description: description.trim() || null,
+            category: category || null,
+            tags: selectedTags.length > 0 ? selectedTags : null,
+            visibility: visibilityValue,
+            mutual_followers_only: mutualFollowersOnly,
+            is_published: false // Start as unpublished until upload completes
+          })
+          .select()
+          .single();
 
-        if (txError || !data?.videoId) {
-          console.error('Upload initialization failed:', txError);
-          throw new Error('Failed to initialize video upload');
+        if (createError || !videoData) {
+          console.error('Failed to create video record:', createError);
+          throw new Error('Failed to create video record');
         }
 
-        const videoId = data.videoId;
-        console.log('Video ID created:', videoId);
+        const videoId = videoData.id;
+        console.log('Video record created with ID:', videoId);
         setUploadProgress(20);
 
-        // 2. Upload video to storage
+        // 2. Upload video file to storage
+        console.log('Uploading video file...');
         const videoFileName = `${user.id}/${videoId}/${Date.now()}-${videoFile.name}`;
         
         const { error: videoUploadError } = await supabase.storage
@@ -139,6 +146,8 @@ const CreateVideoScreen = () => {
 
         if (videoUploadError) {
           console.error('Video upload error:', videoUploadError);
+          // Clean up the video record
+          await supabase.from('videos').delete().eq('id', videoId);
           throw new Error('Video upload failed');
         }
 
@@ -154,6 +163,7 @@ const CreateVideoScreen = () => {
         // 4. Upload thumbnail if exists
         let thumbnailUrl = null;
         if (thumbnailFile) {
+          console.log('Uploading thumbnail...');
           const thumbnailFileName = `${user.id}/${videoId}/${Date.now()}-${thumbnailFile.name}`;
           const { error: thumbnailError } = await supabase.storage
             .from('thumbnails')
@@ -170,41 +180,38 @@ const CreateVideoScreen = () => {
               .from('thumbnails')
               .getPublicUrl(thumbnailFileName);
             thumbnailUrl = thumbUrl;
+            console.log('Thumbnail uploaded successfully:', thumbnailUrl);
           }
         }
 
         setUploadProgress(80);
 
-        // 5. Update video record with all metadata
+        // 5. Update video record with file URLs and publish
+        console.log('Updating video record with URLs...');
         const { error: updateError } = await supabase
           .from('videos')
           .update({
             video_url: videoUrl,
             thumbnail_url: thumbnailUrl,
-            category: category || null,
-            tags: selectedTags,
-            visibility: visibilityValue,
-            mutual_followers_only: mutualFollowersOnly,
             is_published: true,
             updated_at: new Date().toISOString()
           })
           .eq('id', videoId);
 
         if (updateError) {
-          console.error('Video update error:', updateError);
-          throw updateError;
+          console.error('Failed to update video record:', updateError);
+          throw new Error('Failed to update video with file URLs');
         }
 
         setUploadProgress(90);
 
         // 6. Verify the upload
+        console.log('Verifying upload...');
         let retries = 3;
         let isVerified = false;
         
         for (let i = 0; i < retries && !isVerified; i++) {
-          console.log(`Verification attempt ${i + 1}/${retries}`);
           await new Promise(resolve => setTimeout(resolve, 1000 * (i + 1)));
-          
           isVerified = await verifyVideoUpload(videoId);
           
           if (isVerified) {
@@ -219,26 +226,32 @@ const CreateVideoScreen = () => {
 
         setUploadProgress(100);
         
-        return { videoId, videoUrl, thumbnailUrl, visibility: visibilityValue };
+        console.log('Upload process completed successfully');
+        return { 
+          videoId, 
+          videoUrl, 
+          thumbnailUrl, 
+          visibility: visibilityValue,
+          title,
+          description,
+          category,
+          tags: selectedTags
+        };
+
       } catch (error) {
         console.error('Upload process failed:', error);
-        // Attempt cleanup on failure
-        if (data?.videoId) {
-          await supabase.from('videos').delete().eq('id', data.videoId);
-        }
+        setUploadProgress(0);
         throw error;
       }
     },
     onSuccess: (data) => {
       console.log('Upload successful:', data);
-      toast.success(`Video uploaded successfully! Visibility: ${data.visibility}`);
+      toast.success(`Video "${data.title}" uploaded successfully! Visibility: ${data.visibility}`);
       
       // Navigate based on visibility
       if (data.visibility === 'public') {
-        // For public videos, go to home page to see the video
         navigate('/', { replace: true });
       } else {
-        // For private/unlisted videos, go to profile to see the video
         navigate('/profile', { replace: true });
       }
       
