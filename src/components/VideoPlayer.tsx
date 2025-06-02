@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ChevronLeft, Eye, Heart } from 'lucide-react';
@@ -119,6 +118,7 @@ const VideoPlayer = () => {
       if (!id) return false;
       
       const viewerId = getViewerId();
+      console.log('Checking if view exists for video:', id, 'viewer:', viewerId);
       
       const { data, error } = await supabase
         .from('video_views')
@@ -131,7 +131,9 @@ const VideoPlayer = () => {
         console.error('Error checking view status:', error);
         return false;
       }
-      return !!data;
+      const viewExists = !!data;
+      console.log('View exists:', viewExists);
+      return viewExists;
     },
     enabled: !!id
   });
@@ -140,13 +142,21 @@ const VideoPlayer = () => {
   const recordView = useMutation({
     mutationFn: async () => {
       if (!id) throw new Error('Video ID is required');
-      if (hasAlreadyViewed || hasViewedThisSession) {
-        console.log('View already recorded for this user/session');
+      
+      const viewerId = getViewerId();
+      console.log('Attempting to record view for video:', id, 'viewer:', viewerId);
+      console.log('hasAlreadyViewed:', hasAlreadyViewed, 'hasViewedThisSession:', hasViewedThisSession);
+      
+      // Check if view should be recorded
+      if (hasAlreadyViewed) {
+        console.log('View already exists in database, skipping');
         return;
       }
       
-      const viewerId = getViewerId();
-      console.log('Recording view for video:', id, 'viewer:', viewerId);
+      if (hasViewedThisSession) {
+        console.log('View already recorded this session, skipping');
+        return;
+      }
       
       // First, try to insert the view record
       const { error: viewError } = await supabase
@@ -157,6 +167,12 @@ const VideoPlayer = () => {
         });
 
       if (viewError) {
+        // If it's a duplicate key error, that's fine - view already exists
+        if (viewError.code === '23505') {
+          console.log('View already exists (duplicate key), marking as viewed');
+          setHasViewedThisSession(true);
+          return;
+        }
         console.error('Error inserting view:', viewError);
         throw viewError;
       }
@@ -369,12 +385,7 @@ const VideoPlayer = () => {
   // Handle video play - record unique view
   const handleVideoPlay = async () => {
     console.log('Video play event triggered');
-    if (!hasAlreadyViewed && !hasViewedThisSession) {
-      console.log('Recording view...');
-      recordView.mutate();
-    } else {
-      console.log('View already recorded, skipping');
-    }
+    recordView.mutate();
   };
 
   // Update initial like status
@@ -386,7 +397,7 @@ const VideoPlayer = () => {
 
   // Auto-record view on component mount for better UX
   useEffect(() => {
-    if (video && !hasAlreadyViewed && !hasViewedThisSession) {
+    if (video && hasAlreadyViewed === false && !hasViewedThisSession) {
       // Add a small delay to ensure the component is fully loaded
       const timer = setTimeout(() => {
         console.log('Auto-recording view on component mount');
