@@ -126,12 +126,13 @@ const LibraryScreen = () => {
     console.log('Saving draft:', formData);
     // TODO: Add draft saving logic
   };
-
-  const filteredNews = useMemo(() => {
+  const filteredArticles = useMemo(() => {
     const query = searchQuery.toLowerCase();
     let filtered = newsAndEvents.filter(item => 
-      item.title.toLowerCase().includes(query) ||
-      item.description.toLowerCase().includes(query)
+      item.category !== 'Webinars' && (
+        item.title.toLowerCase().includes(query) ||
+        item.description.toLowerCase().includes(query)
+      )
     );
 
     if (selectedCategory !== 'All') {
@@ -144,6 +145,16 @@ const LibraryScreen = () => {
       return sortOrder === 'newest' ? dateB - dateA : dateA - dateB;
     });
   }, [searchQuery, selectedCategory, sortOrder]);
+
+  const webinars = useMemo(() => {
+    return newsAndEvents
+      .filter(item => item.category === 'Webinars')
+      .sort((a, b) => {
+        const dateA = new Date(a.date).getTime();
+        const dateB = new Date(b.date).getTime();
+        return dateB - dateA; // Always show newest webinars first
+      });
+  }, []);
 
   const categories = useMemo(() => {
     return Array.from(new Set(newsAndEvents.map(item => item.category)));
@@ -639,10 +650,9 @@ const renderServiceRequestForm = () => (
                 </div>
               </div>
 
-              {/* News & Events Grid */}
-              {selectedCategory === 'All' ? (
+              {/* News & Events Grid */}              {selectedCategory === 'All' ? (
                 categories.map(category => {
-                  const categoryItems = filteredNews.filter(item => item.category === category);
+                  const categoryItems = filteredArticles.filter(item => item.category === category);
                   if (categoryItems.length === 0 || category === 'Webinars') return null;
                   
                   return (
@@ -658,19 +668,15 @@ const renderServiceRequestForm = () => (
                 <div>
                   <h2 className="text-2xl font-bold mb-6">{selectedCategory}</h2>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {filteredNews.map(renderEventCard)}
+                    {filteredArticles.map(renderEventCard)}
                   </div>
                 </div>
               )}
             </div>
-          </TabsContent>
-
-          <TabsContent value="webinars">
+          </TabsContent>          <TabsContent value="webinars">
             <div className="space-y-12">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {filteredNews
-                  .filter(item => item.category === 'Webinars')
-                  .map(renderEventCard)}
+                {webinars.map(renderEventCard)}
               </div>
             </div>
           </TabsContent>
