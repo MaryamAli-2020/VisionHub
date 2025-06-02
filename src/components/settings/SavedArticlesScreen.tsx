@@ -1,3 +1,4 @@
+
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
@@ -37,8 +38,7 @@ export function SavedArticlesScreen() {
           article_url: item.article_url,
           article_type: articleType,
           thumbnail_url: item.thumbnail_url || undefined,
-          created_at: item.created_at,
-          updated_at: item.updated_at
+          created_at: item.created_at
         };
       });
     },
