@@ -266,7 +266,7 @@ const HomeScreen = () => {
              <div className="mb-8 -mx-6">              <div className="px-6">
                 <h2 className="text-xl font-bold mb-4">Featured Creators</h2>
               </div>
-              <div className="relative w-full">
+              <div className="relative w-full px-6 ">
                 <div className="flex space-x-4 overflow-x-auto px-6 pb-4">
                   {profiles.map((profile) => (
                     <div key={profile.id} className="flex-shrink-0 text-center">
