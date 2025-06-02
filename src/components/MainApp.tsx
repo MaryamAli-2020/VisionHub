@@ -13,6 +13,8 @@ import { SavedArticlesScreen } from './settings/SavedArticlesScreen';
 import { LinkedAccountsScreen } from './settings/LinkedAccountsScreen';
 import { MobileNumberScreen } from './settings/MobileNumberScreen';
 import { NotificationsScreen } from './settings/NotificationsScreen';
+import ViewFeed from './ViewFeed';
+import MessagesScreen from './MessagesScreen';
 
 const MainApp = () => {
   const navigate = useNavigate();
@@ -24,6 +26,9 @@ const MainApp = () => {
         <Routes>
           <Route path="/" element={<HomeScreen />} />
           <Route path="/video/:id" element={<VideoPlayer />} />
+          <Route path="/profile" element={<ProfileScreen />} />
+          <Route path='/viewfeed' element={<ViewFeed />} />
+          <Route path="/messages" element={<MessagesScreen />} />
           <Route path="/network" element={<NetworkScreen />} />
           <Route path="/create" element={<CreateVideoScreen />} />
           <Route path="/library" element={<LibraryScreen />} />

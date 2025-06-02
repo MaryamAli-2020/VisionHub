@@ -1,32 +1,32 @@
-
-
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Home, Search, Plus, User, Video, Network, Earth } from 'lucide-react';
-import { Global } from 'recharts';
+import { Home, Plus, User, Video, Earth } from 'lucide-react';
 
 const BottomNavigation = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const isActive = (path: string) => location.pathname === path;
+  const isActive = (path: string | string[]) => {
+    if (Array.isArray(path)) {
+      return path.some(p => location.pathname.startsWith(p));
+    }
+    return path === '/' ? location.pathname === '/' : location.pathname.startsWith(path);
+  };
 
   return (
     <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 px-6 py-2 z-50">
-      <div className="flex justify-around items-center">
-        <button
+      <div className="flex justify-around items-center">        <button
           onClick={() => navigate('/')}
           className={`flex flex-col items-center p-2 ${
-            isActive('/') ? 'text-red-500' : 'text-gray-500'
+            (location.pathname === '/' || location.pathname.startsWith('/network')) ? 'text-red-500' : 'text-gray-500'
           }`}
         >
           <Home className="w-6 h-6" />
           <span className="text-xs mt-1">Home</span>
         </button>
-        
-        <button
-          onClick={() => navigate('/network')}
+          <button
+          onClick={() => navigate('/profile')}
           className={`flex flex-col items-center p-2 ${
-            isActive('/network') ? 'text-red-500' : 'text-gray-500'
+            (location.pathname === '/profile' || location.pathname.startsWith('/messages')) ? 'text-red-500' : 'text-gray-500'
           }`}
         >
           <Earth className="w-6 h-6" />
@@ -51,11 +51,10 @@ const BottomNavigation = () => {
         >
           <Video className="w-6 h-6" />
           <span className="text-xs mt-1">Library</span>
-        </button>
-          <button
+        </button>        <button
           onClick={() => navigate('/profile-settings')}
           className={`flex flex-col items-center p-2 ${
-            isActive('/profile-settings') ? 'text-red-500' : 'text-gray-500'
+            location.pathname === '/profile-settings' ? 'text-red-500' : 'text-gray-500'
           }`}
         >
           <User className="w-6 h-6" />

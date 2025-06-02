@@ -184,6 +184,7 @@ const ProfileScreen = () => {
         const { error: updateError } = await supabase
           .from('profiles')
           .update({
+            id: user.id,
             avatar_url: publicUrl,
             updated_at: new Date().toISOString()
           })
@@ -522,7 +523,7 @@ const ProfileScreen = () => {
             Edit Profile
           </Button>
           <Button 
-            onClick={() => navigate('/feed')}
+            onClick={() => navigate('/viewfeed')}
             variant="outline"
             className="border-slate-300 text-slate-700 hover:bg-slate-50 hover:border-slate-400 py-3 h-12 rounded-xl font-medium transition-colors"
           >

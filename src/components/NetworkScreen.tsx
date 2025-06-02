@@ -43,6 +43,7 @@ const NetworkScreen = () => {
   const { user } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<SortOption>('latest');
+  const [activeTab, setActiveTab] = useState<'home' | 'network'>('home');
   const debouncedSearchQuery = useDebounce(searchQuery, 300);
 
   // Fetch following connections
@@ -214,8 +215,24 @@ const NetworkScreen = () => {
     <div className="min-h-screen bg-white">
       {/* Header */}
       <div className="px-6 pt-12 pb-6">
-        <h1 className="text-2xl font-bold mb-6">Your Network</h1>
-
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex space-x-8">
+            <button
+              onClick={() => navigate('/')}
+              className={`text-lg text-gray-400 font-semibold `}
+            >
+              Home page
+            </button>
+            <button
+              onClick={() => navigate('network')}
+              className={`text-lg font-semibold text-black border-b-2 border-black`}
+                
+            >
+              Following
+            </button>
+          </div>
+        </div>
+        
         {/* Search */}
         <div className="relative mb-6">
           <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />

@@ -187,9 +187,9 @@ const HomeScreen = () => {
               Home page
             </button>
             <button
-              onClick={() => setActiveTab('subscription')}
+              onClick={() => navigate('network')}
               className={`text-lg font-semibold ${
-                activeTab === 'subscription' ? 'text-black border-b-2 border-black' : 'text-gray-400'
+                activeTab === 'network' ? 'text-black border-b-2 border-black' : 'text-gray-400'
               }`}
             >
               Following
