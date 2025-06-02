@@ -86,12 +86,12 @@ const NetworkScreen = () => {
 
       const followingIds = following.map(f => f.following_id);
       
-      // Fetch videos from following
+      // Fetch videos from following with proper join
       const { data: videos, error: videosError } = await supabase
         .from('videos')
         .select(`
           *,
-          profiles (*)
+          profiles!videos_user_id_fkey (*)
         `)
         .in('user_id', followingIds)
         .eq('is_published', true)
@@ -99,12 +99,12 @@ const NetworkScreen = () => {
 
       if (videosError) throw videosError;
 
-      // Fetch posts from following
+      // Fetch posts from following with proper join
       const { data: posts, error: postsError } = await supabase
         .from('posts')
         .select(`
           *,
-          profiles (*)
+          profiles!posts_user_id_fkey (*)
         `)
         .in('user_id', followingIds)
         .eq('is_published', true);
