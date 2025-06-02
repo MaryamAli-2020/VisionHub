@@ -28,7 +28,7 @@ type VideoWithProfile = Video & {
 type PostWithProfile = Post & {
   profiles: Profile | null;
   content_type: 'post';
-  title?: string; // Add title for posts to match videos
+  title?: string;
 };
 
 type ContentItem = VideoWithProfile | PostWithProfile;
@@ -112,16 +112,22 @@ const NetworkScreen = () => {
       if (postsError) throw postsError;
 
       // Combine and type the content properly
-      const videoItems: VideoWithProfile[] = (videos || []).map(v => ({
-        ...v,
-        content_type: 'video' as const
-      }));
+      const videoItems: VideoWithProfile[] = (videos || [])
+        .filter(v => v.profiles) // Filter out items without profiles
+        .map(v => ({
+          ...v,
+          content_type: 'video' as const,
+          profiles: v.profiles as Profile
+        }));
 
-      const postItems: PostWithProfile[] = (posts || []).map(p => ({
-        ...p,
-        content_type: 'post' as const,
-        title: p.content ? p.content.slice(0, 50) + '...' : 'Post' // Generate title from content
-      }));
+      const postItems: PostWithProfile[] = (posts || [])
+        .filter(p => p.profiles) // Filter out items without profiles
+        .map(p => ({
+          ...p,
+          content_type: 'post' as const,
+          title: p.content ? p.content.slice(0, 50) + '...' : 'Post',
+          profiles: p.profiles as Profile
+        }));
 
       const allContent: ContentItem[] = [...videoItems, ...postItems];
 
