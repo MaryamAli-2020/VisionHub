@@ -1,7 +1,7 @@
 
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, Filter, SortDesc } from 'lucide-react';
+import { Search, SortDesc } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { useQuery } from '@tanstack/react-query';
@@ -17,12 +17,21 @@ import {
 import { Database } from '@/integrations/supabase/types';
 
 type Profile = Database['public']['Tables']['profiles']['Row'];
-type Video = Database['public']['Tables']['videos']['Row'] & {
+type Video = Database['public']['Tables']['videos']['Row'];
+type Post = Database['public']['Tables']['posts']['Row'];
+
+type VideoWithProfile = Video & {
   profiles: Profile | null;
+  content_type: 'video';
 };
-type Post = Database['public']['Tables']['posts']['Row'] & {
+
+type PostWithProfile = Post & {
   profiles: Profile | null;
+  content_type: 'post';
+  title?: string; // Add title for posts to match videos
 };
+
+type ContentItem = VideoWithProfile | PostWithProfile;
 
 type FollowWithProfile = Database['public']['Tables']['follows']['Row'] & {
   following_profile: Profile;
@@ -70,7 +79,7 @@ const NetworkScreen = () => {
   });
 
   // Fetch recent content from following
-  const { data: recentContent, isLoading } = useQuery<(Video | Post)[]>({
+  const { data: recentContent, isLoading } = useQuery<ContentItem[]>({
     queryKey: ['following-content', user?.id, debouncedSearchQuery, sortBy],
     queryFn: async () => {
       if (!user?.id || !following?.length) return [];
@@ -82,16 +91,7 @@ const NetworkScreen = () => {
         .from('videos')
         .select(`
           *,
-          profiles (
-            id,
-            full_name,
-            avatar_url,
-            specialty,
-            bio,
-            created_at,
-            updated_at,
-            username
-          )
+          profiles (*)
         `)
         .in('user_id', followingIds)
         .eq('is_published', true)
@@ -104,48 +104,54 @@ const NetworkScreen = () => {
         .from('posts')
         .select(`
           *,
-          profiles (
-            id,
-            full_name,
-            avatar_url,
-            specialty,
-            bio,
-            created_at,
-            updated_at,
-            username
-          )
+          profiles (*)
         `)
         .in('user_id', followingIds)
         .eq('is_published', true);
 
       if (postsError) throw postsError;
 
-      // Combine and sort content
-      const allContent = [
-        ...(videos || []).map(v => ({ ...v, content_type: 'video' as const })),
-        ...(posts || []).map(p => ({ ...p, content_type: 'post' as const }))
-      ];
+      // Combine and type the content properly
+      const videoItems: VideoWithProfile[] = (videos || []).map(v => ({
+        ...v,
+        content_type: 'video' as const
+      }));
+
+      const postItems: PostWithProfile[] = (posts || []).map(p => ({
+        ...p,
+        content_type: 'post' as const,
+        title: p.content ? p.content.slice(0, 50) + '...' : 'Post' // Generate title from content
+      }));
+
+      const allContent: ContentItem[] = [...videoItems, ...postItems];
 
       // Apply search filter
       let filteredContent = allContent;
       if (debouncedSearchQuery) {
-        filteredContent = allContent.filter(item => 
-          item.title?.toLowerCase().includes(debouncedSearchQuery.toLowerCase()) ||
-          item.content?.toLowerCase().includes(debouncedSearchQuery.toLowerCase()) ||
-          item.profiles?.full_name?.toLowerCase().includes(debouncedSearchQuery.toLowerCase())
-        );
+        filteredContent = allContent.filter(item => {
+          const title = item.content_type === 'video' ? item.title : item.title || item.content;
+          const content = item.content_type === 'video' ? item.description : item.content;
+          
+          return title?.toLowerCase().includes(debouncedSearchQuery.toLowerCase()) ||
+                 content?.toLowerCase().includes(debouncedSearchQuery.toLowerCase()) ||
+                 item.profiles?.full_name?.toLowerCase().includes(debouncedSearchQuery.toLowerCase());
+        });
       }
 
       // Apply sorting
       switch (sortBy) {
         case 'oldest':
-          filteredContent.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+          filteredContent.sort((a, b) => new Date(a.created_at || '').getTime() - new Date(b.created_at || '').getTime());
           break;
         case 'popular':
-          filteredContent.sort((a, b) => (b.views_count || b.likes_count || 0) - (a.views_count || a.likes_count || 0));
+          filteredContent.sort((a, b) => {
+            const aCount = a.content_type === 'video' ? (a.views_count || 0) : (a.likes_count || 0);
+            const bCount = b.content_type === 'video' ? (b.views_count || 0) : (b.likes_count || 0);
+            return bCount - aCount;
+          });
           break;
         default:
-          filteredContent.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+          filteredContent.sort((a, b) => new Date(b.created_at || '').getTime() - new Date(a.created_at || '').getTime());
       }
 
       return filteredContent;
@@ -163,8 +169,8 @@ const NetworkScreen = () => {
     navigate(`/profile/${username}`);
   };
 
-  const handleContentClick = (item: Video | Post) => {
-    if ('video_url' in item) {
+  const handleContentClick = (item: ContentItem) => {
+    if (item.content_type === 'video') {
       navigate(`/video/${item.id}`);
     } else {
       // For posts, you might want to navigate to a post detail page or user profile
@@ -306,10 +312,16 @@ const NetworkScreen = () => {
                 >
                   {/* Content Thumbnail */}
                   <div className="relative">
-                    {'thumbnail_url' in item && item.thumbnail_url ? (
+                    {item.content_type === 'video' && item.thumbnail_url ? (
                       <img
                         src={item.thumbnail_url}
                         alt={item.title}
+                        className="w-full h-32 object-cover"
+                      />
+                    ) : item.content_type === 'post' && item.media_url && item.media_url.length > 0 ? (
+                      <img
+                        src={item.media_url[0]}
+                        alt="Post media"
                         className="w-full h-32 object-cover"
                       />
                     ) : (
@@ -321,7 +333,7 @@ const NetworkScreen = () => {
                     )}
                     
                     {/* Duration for videos */}
-                    {'duration' in item && item.duration && (
+                    {item.content_type === 'video' && item.duration && (
                       <span className="absolute bottom-2 right-2 bg-black bg-opacity-75 text-white text-xs px-2 py-1 rounded">
                         {Math.floor(item.duration / 60)}:{(item.duration % 60).toString().padStart(2, '0')}
                       </span>
@@ -329,7 +341,7 @@ const NetworkScreen = () => {
                     
                     {/* View count overlay */}
                     <div className="absolute top-2 left-2 bg-black bg-opacity-75 text-white text-xs px-2 py-1 rounded">
-                      {item.views_count || item.likes_count || 0} {item.content_type === 'video' ? 'views' : 'likes'}
+                      {item.content_type === 'video' ? (item.views_count || 0) : (item.likes_count || 0)} {item.content_type === 'video' ? 'views' : 'likes'}
                     </div>
                   </div>
                   
@@ -343,7 +355,7 @@ const NetworkScreen = () => {
                       />
                       <div className="flex-1 min-w-0">
                         <h3 className="font-medium text-sm text-gray-900 line-clamp-2 mb-1">
-                          {item.title || (item.content_type === 'post' ? 'Post' : 'Video')}
+                          {item.content_type === 'video' ? item.title : (item.title || 'Post')}
                         </h3>
                         <p className="text-xs text-gray-600 truncate">
                           {item.profiles?.full_name || 'Unknown Creator'}
