@@ -1,3 +1,4 @@
+
 import { useState } from 'react';
 import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import BottomNavigation from './BottomNavigation';
@@ -7,6 +8,7 @@ import ProfileScreen from './ProfileScreen';
 import CreateVideoScreen from './CreateVideoScreen';
 import LibraryScreen from './LibraryScreen';
 import SettingsScreen from './SettingsScreen';
+import NetworkScreen from './NetworkScreen';
 import { SavedArticlesScreen } from './settings/SavedArticlesScreen';
 import { LinkedAccountsScreen } from './settings/LinkedAccountsScreen';
 import { MobileNumberScreen } from './settings/MobileNumberScreen';
@@ -22,7 +24,7 @@ const MainApp = () => {
         <Routes>
           <Route path="/" element={<HomeScreen />} />
           <Route path="/video/:id" element={<VideoPlayer />} />
-          <Route path="/profile" element={<ProfileScreen />} />
+          <Route path="/network" element={<NetworkScreen />} />
           <Route path="/create" element={<CreateVideoScreen />} />
           <Route path="/library" element={<LibraryScreen />} />
           <Route path="/profile-settings" element={<SettingsScreen />} />          <Route path="/saved-articles" element={<SavedArticlesScreen />} />

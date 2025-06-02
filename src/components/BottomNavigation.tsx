@@ -1,4 +1,5 @@
 
+
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Home, Search, Plus, User, Video, Network, Earth } from 'lucide-react';
 import { Global } from 'recharts';
@@ -23,9 +24,9 @@ const BottomNavigation = () => {
         </button>
         
         <button
-          onClick={() => navigate('/profile')}
+          onClick={() => navigate('/network')}
           className={`flex flex-col items-center p-2 ${
-            isActive('/profile') ? 'text-red-500' : 'text-gray-500'
+            isActive('/network') ? 'text-red-500' : 'text-gray-500'
           }`}
         >
           <Earth className="w-6 h-6" />
