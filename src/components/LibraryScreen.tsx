@@ -1,9 +1,11 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { 
   Search, ChevronDown, Eye, MessageSquare, ThumbsUp, Calendar, FileText, 
   Radio, AlertCircle, Save, Send
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
+import emailjs from '@emailjs/browser';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { newsAndEvents } from '@/data/newsAndEvents';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
@@ -114,17 +116,67 @@ const LibraryScreen = () => {
       amount: ''
     }
   });
+  const handleSubmitService = async () => {
+    if (!formData.fullName || !formData.username || !formData.email || formData.serviceTypes.length === 0 || !formData.description || !formData.expectedOutcome) {
+      toast.error('Please fill in all required fields');
+      return;
+    }
 
-  const handleSubmitService = () => {
-    // Here you would implement the service request submission
-    console.log('Service request data:', formData);
-    // TODO: Add actual submission logic
+    try {
+      const templateParams = {
+        name: formData.fullName,
+        username: formData.username,
+        email: formData.email,
+        phone: formData.phone,
+        services: formData.serviceTypes.join(', '),
+        description: formData.description,
+        expected_outcome: formData.expectedOutcome,
+        deadline: formData.deadline,
+        additional_notes: formData.additionalNotes,
+        communication: formData.communicationMethod,
+        budget_type: formData.budget.type,
+        budget_amount: formData.budget.amount
+      };
+
+      await emailjs.send(
+        'service_f2q3ogx',
+        'template_qqgod6z',
+        templateParams,
+        'fCHSNNcDI6ZBfA25Z' 
+      );
+
+      toast.success('Service request submitted successfully!');
+      setFormData({
+        fullName: '',
+        username: '',
+        email: '',
+        phone: '',
+        serviceTypes: [],
+        description: '',
+        expectedOutcome: '',
+        deadline: '',
+        additionalNotes: '',
+        communicationMethod: 'in-app',
+        budget: {
+          type: 'fixed',
+          amount: ''
+        }
+      });
+    } catch (error) {
+      console.error('Error submitting service request:', error);
+      toast.error('Failed to submit service request. Please try again.');
+    }
   };
 
   const handleSaveAsDraft = () => {
-    // Here you would implement draft saving functionality
-    console.log('Saving draft:', formData);
-    // TODO: Add draft saving logic
+    try {
+      const draft = JSON.stringify(formData);
+      localStorage.setItem('serviceRequestDraft', draft);
+      toast.success('Draft saved successfully!');
+    } catch (error) {
+      console.error('Error saving draft:', error);
+      toast.error('Failed to save draft. Please try again.');
+    }
   };  const parseEventDate = (dateStr: string) => {
     // Handle date format like "2025-06-15" or date ranges like "2025-06-15 - 2025-06-20"
     const firstDate = dateStr.split('-')[0].trim(); // Get the first date in case of a range
@@ -554,7 +606,21 @@ const renderServiceRequestForm = () => (
       </div>
     </Card>
   </div>
-);  return (
+);  // Load saved draft when component mounts
+  useEffect(() => {
+    const savedDraft = localStorage.getItem('serviceRequestDraft');
+    if (savedDraft) {
+      try {
+        const parsedDraft = JSON.parse(savedDraft);
+        setFormData(parsedDraft);
+        toast.info('Loaded saved draft');
+      } catch (error) {
+        console.error('Error loading draft:', error);
+      }
+    }
+  }, []);
+
+  return (
     <div className="min-h-screen bg-white">
       <div className="px-6 pt-8">
         <div className="relative bg-white/80 backdrop-blur-sm rounded-2xl border border-white/50 p-2 mb-8 max-w-[400px] mx-auto">
