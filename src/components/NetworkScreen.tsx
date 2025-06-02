@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, SortDesc } from 'lucide-react';
@@ -86,48 +85,62 @@ const NetworkScreen = () => {
 
       const followingIds = following.map(f => f.following_id);
       
-      // Fetch videos from following with proper join
+      // Fetch videos from following
       const { data: videos, error: videosError } = await supabase
         .from('videos')
-        .select(`
-          *,
-          profiles!videos_user_id_fkey (*)
-        `)
+        .select('*')
         .in('user_id', followingIds)
         .eq('is_published', true)
         .eq('visibility', 'public');
 
       if (videosError) throw videosError;
 
-      // Fetch posts from following with proper join
+      // Fetch posts from following
       const { data: posts, error: postsError } = await supabase
         .from('posts')
-        .select(`
-          *,
-          profiles!posts_user_id_fkey (*)
-        `)
+        .select('*')
         .in('user_id', followingIds)
         .eq('is_published', true);
 
       if (postsError) throw postsError;
 
-      // Combine and type the content properly
+      // Fetch profiles for all content creators
+      const allUserIds = [
+        ...(videos || []).map(v => v.user_id).filter(Boolean),
+        ...(posts || []).map(p => p.user_id).filter(Boolean)
+      ];
+      const uniqueUserIds = [...new Set(allUserIds)];
+
+      const { data: profilesData, error: profilesError } = await supabase
+        .from('profiles')
+        .select('*')
+        .in('id', uniqueUserIds);
+
+      if (profilesError) throw profilesError;
+
+      // Create profile lookup map
+      const profilesMap = new Map<string, Profile>();
+      profilesData?.forEach(profile => {
+        profilesMap.set(profile.id, profile);
+      });
+
+      // Combine and type the content properly with profiles
       const videoItems: VideoWithProfile[] = (videos || [])
-        .filter(v => v.profiles) // Filter out items without profiles
         .map(v => ({
           ...v,
           content_type: 'video' as const,
-          profiles: v.profiles as Profile
-        }));
+          profiles: v.user_id ? profilesMap.get(v.user_id) || null : null
+        }))
+        .filter(v => v.profiles !== null);
 
       const postItems: PostWithProfile[] = (posts || [])
-        .filter(p => p.profiles) // Filter out items without profiles
         .map(p => ({
           ...p,
           content_type: 'post' as const,
           title: p.content ? p.content.slice(0, 50) + '...' : 'Post',
-          profiles: p.profiles as Profile
-        }));
+          profiles: p.user_id ? profilesMap.get(p.user_id) || null : null
+        }))
+        .filter(p => p.profiles !== null);
 
       const allContent: ContentItem[] = [...videoItems, ...postItems];
 
