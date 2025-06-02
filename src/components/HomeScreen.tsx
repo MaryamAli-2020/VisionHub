@@ -166,7 +166,7 @@ const HomeScreen = () => {
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
-        .limit(4);
+        .limit(10);
       
       if (error) throw error;
       return data;
