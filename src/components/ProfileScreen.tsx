@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { 
   LogOut, Edit, Upload, Send, Image, Video, File, 
   Users, MessageCircle, Plus, Play, MoreVertical,
-  PencilLine, Trash 
+  PencilLine, Trash, Bell
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -556,8 +556,8 @@ const ProfileScreen = () => {
             variant="outline"
             className="border-slate-300 text-slate-700 hover:bg-slate-50 hover:border-slate-400 py-3 h-12 rounded-xl font-medium transition-colors"
           >
-            <Plus className="w-5 h-5 mr-2" />
-            View Feed
+            <Bell className="w-5 h-5 mr-2" />
+            Notifications
           </Button>
           <Button 
             onClick={() => navigate('/messages')}

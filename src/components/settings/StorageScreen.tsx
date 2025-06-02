@@ -104,13 +104,8 @@ export function StorageScreen() {
 
   return (
     <div className="max-w-2xl mx-auto p-6">
-      <div className="space-y-6">
-        <div className="flex items-center space-x-2">
-          <HardDrive className="w-5 h-5 text-gray-500" />
-          <h2 className="text-lg font-medium">Storage Usage</h2>
-        </div>
-
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 space-y-6">
+      <div>
+         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 space-y-6">
           {/* Storage Progress */}
           <div className="space-y-2">
             <div className="flex justify-between text-sm">
