@@ -1,6 +1,6 @@
-
 import { useState, useRef } from 'react';
 import { ChevronLeft, Upload, X, ChevronDown } from 'lucide-react';
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { useAuth } from '@/hooks/useAuth';
 import { useMutation } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
@@ -29,8 +29,41 @@ const CreateVideoScreen = () => {
   const videoInputRef = useRef(null);
   const thumbnailInputRef = useRef(null);
 
-  const availableTags = ['Gaming', 'Music', 'Education', 'Entertainment', 'Sports', 'Technology', 'Comedy', 'News'];
-  const categories = ['Gaming', 'Music', 'Education', 'Entertainment', 'Sports', 'Technology', 'Comedy', 'News', 'Vlogs'];
+  const availableTags = [
+    // Entertainment & Media
+    'Sports', 'Movies', 'Music', 'Gaming', 'Anime', 'TVShows', 'Kpop', 'Memes', 'Celebrities',
+    
+    // Technology & Science
+    'Technology', 'Science', 'AI', 'MachineLearning', 'Robotics', 'Space', 'Astronomy', 'Biology', 'Physics', 'Chemistry', 'Coding',
+    
+    // Lifestyle & Personal Development
+    'Fashion', 'Fitness', 'Health', 'Skincare', 'Beauty', 'MentalHealth', 'Productivity', 'CareerTips', 'LifeHacks', 'Minimalism',
+    
+    // Arts & Creativity
+    'Photography', 'Art', 'Design', 'DIYProjects', 'Crafts', 'Journaling',
+    
+    // Education & Knowledge
+    'Education', 'History', 'Languages', 'Mathematics', 'Philosophy', 'Psychology',
+    
+    // Business & Finance
+    'Business', 'Startups', 'Investing', 'Crypto', 'Marketing', 'Entrepreneurship', 'Ecommerce', 'Freelancing', 'Leadership',
+    
+    // Hobbies & Interests
+    'Books', 'Cooking', 'Cars', 'Travel', 'HomeDecor', 'BoardGames', 'Pets', 'BirdWatching', 'ModelBuilding', 'Collectibles',
+    
+    // Society & Culture
+    'News', 'Politics', 'Environment', 'Sustainability', 'Spirituality', 'Parenting', 'Relationships', 'Lifestyle', 'UrbanExploration'
+  ];
+  const categories = [
+    'Entertainment & Pop Culture',
+    'Education & Learning',
+    'Business & Finance',
+    'Lifestyle & Wellness',
+    'Culture & Society',
+    'DIY & Skills',
+    'STEM',
+    'Hobbies & Interests'
+  ];
   const visibilityOptions = ['Public', 'Private', 'Unlisted'];
 
   const handleVideoUpload = (file) => {
@@ -392,25 +425,22 @@ const CreateVideoScreen = () => {
               
               {showTagsDropdown && (
                 <div className="absolute top-full left-0 mt-2 w-64 bg-white border border-gray-200 rounded-xl shadow-lg z-10 p-4">
-                  <div className="space-y-2">
-                    {availableTags.map(tag => (
-                      <label key={tag} className="flex items-center space-x-2 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={selectedTags.includes(tag)}
-                          onChange={() => toggleTag(tag)}
-                          className="w-4 h-4 text-red-500 rounded focus:ring-red-500"
-                        />
-                        <span className="text-sm">{tag}</span>
-                      </label>
-                    ))}
-                  </div>
-                  <button
-                    onClick={() => setShowTagsDropdown(false)}
-                    className="w-full mt-3 px-3 py-2 bg-red-500 text-white rounded-lg text-sm hover:bg-red-600 transition-colors"
-                  >
-                    Done
-                  </button>
+                  <ScrollArea className="h-[300px] pr-4">
+                    <div className="space-y-2">
+                      {availableTags.map(tag => (
+                        <label key={tag} className="flex items-center space-x-2 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={selectedTags.includes(tag)}
+                            onChange={() => toggleTag(tag)}
+                            className="w-4 h-4 text-red-500 rounded focus:ring-red-500"
+                          />
+                          <span className="text-sm">{tag}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </ScrollArea>
+                  
                 </div>
               )}
             </div>

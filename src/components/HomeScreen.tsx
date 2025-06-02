@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Search, Plus, ChevronDown, Filter, SortDesc } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
@@ -21,7 +22,7 @@ type Video = Database['public']['Tables']['videos']['Row'] & {
 };
 
 type SortOption = 'latest' | 'oldest' | 'popular';
-type CategoryOption = 'all' | 'gaming' | 'music' | 'education' | 'entertainment' | 'sports' | 'technology' | 'comedy' | 'news';
+type CategoryOption = 'all' | 'Entertainment & Pop Culture' | 'Education & Learning' | 'Business & Finance' | 'Lifestyle & Wellness' | 'Culture & Society' | 'DIY & Skills' | 'STEM' | 'Hobbies & Interests';
 
 const HomeScreen = () => {
   const navigate = useNavigate();
@@ -175,27 +176,13 @@ const HomeScreen = () => {
   return (
     <div className="min-h-screen bg-white">
       {/* Header */}
-      <div className="px-6 pt-12 pb-6">
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex space-x-8">
-            <button
-              onClick={() => setActiveTab('home')}
-              className={`text-lg font-semibold ${
-                activeTab === 'home' ? 'text-black border-b-2 border-black' : 'text-gray-400'
-              }`}
-            >
-              Home page
-            </button>
-            <button
-              onClick={() => navigate('network')}
-              className={`text-lg font-semibold ${
-                activeTab === 'network' ? 'text-black border-b-2 border-black' : 'text-gray-400'
-              }`}
-            >
-              Following
-            </button>
-          </div>
-        </div>
+      <div className="px-6 pt-8 pb-6">
+        <Tabs defaultValue="home" className="w-full flex justify-center" onValueChange={(value) => value === 'network' ? navigate('network') : setActiveTab('home')}>
+          <TabsList className="w-full max-w-[400px] flex justify-center border-b mb-6">
+            <TabsTrigger value="home">Home</TabsTrigger>
+            <TabsTrigger value="network">Following</TabsTrigger>
+          </TabsList>
+        </Tabs>
 
         {/* Search */}
         <div className="relative mb-6">
@@ -242,30 +229,29 @@ const HomeScreen = () => {
             <DropdownMenuContent>
               <DropdownMenuItem onClick={() => setCategory('all')}>
                 All Categories
+              </DropdownMenuItem>              <DropdownMenuItem onClick={() => setCategory('Entertainment & Pop Culture')}>
+                Entertainment & Pop Culture
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setCategory('gaming')}>
-                Gaming
+              <DropdownMenuItem onClick={() => setCategory('Education & Learning')}>
+                Education & Learning
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setCategory('music')}>
-                Music
+              <DropdownMenuItem onClick={() => setCategory('Business & Finance')}>
+                Business & Finance
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setCategory('education')}>
-                Education
+              <DropdownMenuItem onClick={() => setCategory('Lifestyle & Wellness')}>
+                Lifestyle & Wellness
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setCategory('entertainment')}>
-                Entertainment
+              <DropdownMenuItem onClick={() => setCategory('Culture & Society')}>
+                Culture & Society
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setCategory('sports')}>
-                Sports
+              <DropdownMenuItem onClick={() => setCategory('DIY & Skills')}>
+                DIY & Skills
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setCategory('technology')}>
-                Technology
+              <DropdownMenuItem onClick={() => setCategory('STEM')}>
+                STEM
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setCategory('comedy')}>
-                Comedy
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setCategory('news')}>
-                News
+              <DropdownMenuItem onClick={() => setCategory('Hobbies & Interests')}>
+                Hobbies & Interests
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -275,16 +261,16 @@ const HomeScreen = () => {
       {/* Content */}
       <div className="px-6">
         {activeTab === 'home' && (
-          <>
-            {/* Featured Creators */}
+          <>            {/* Featured Creators */}
             {profiles && profiles.length > 0 && (
-             <div className="mb-8">
-              <h2 className="text-xl font-bold mb-4">Featured Creators</h2>
-              <div className="flex">
-                <div className="flex space-x-4 overflow-x-auto pb-4">
+             <div className="mb-8 -mx-6">              <div className="px-6">
+                <h2 className="text-xl font-bold mb-4">Featured Creators</h2>
+              </div>
+              <div className="relative w-full">
+                <div className="flex space-x-4 overflow-x-auto px-6 pb-4">
                   {profiles.map((profile) => (
                     <div key={profile.id} className="flex-shrink-0 text-center">
-                      <div className="w-16 h-16 bg-gradient-to-r from-red-500 to-purple-500 rounded-xl mb-2 flex items-center justify-center relative mx-auto">
+                      <div className="w-16 h-16 bg-gradient-to-r from-cyan-500 to-red-500 rounded-xl mb-2 flex items-center justify-center relative mx-auto">
                         <img
                           src={profile.avatar_url || "/placeholder.svg?height=48&width=48"}
                           alt={profile.full_name || 'Creator'}

@@ -14,6 +14,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Database } from '@/integrations/supabase/types';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 type Profile = Database['public']['Tables']['profiles']['Row'];
 type Video = Database['public']['Tables']['videos']['Row'];
@@ -213,25 +214,13 @@ const NetworkScreen = () => {
 
   return (
     <div className="min-h-screen bg-white">
-      {/* Header */}
-      <div className="px-6 pt-12 pb-6">
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex space-x-8">
-            <button
-              onClick={() => navigate('/')}
-              className={`text-lg text-gray-400 font-semibold `}
-            >
-              Home page
-            </button>
-            <button
-              onClick={() => navigate('network')}
-              className={`text-lg font-semibold text-black border-b-2 border-black`}
-                
-            >
-              Following
-            </button>
-          </div>
-        </div>
+      {/* Header */}      <div className="px-6 pt-8 pb-6">
+        <Tabs defaultValue="network" className="w-full flex justify-center" onValueChange={(value) => value === 'home' ? navigate('/') : setActiveTab('network')}>
+          <TabsList className="w-full max-w-[400px] flex justify-center border-b mb-6">
+            <TabsTrigger value="home">Home</TabsTrigger>
+            <TabsTrigger value="network">Following</TabsTrigger>
+          </TabsList>
+        </Tabs>
         
         {/* Search */}
         <div className="relative mb-6">

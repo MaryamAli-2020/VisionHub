@@ -1,33 +1,32 @@
+import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Button } from '@/components/ui/button';
-import { useAuth } from '@/hooks/useAuth';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
 import { 
   LogOut, Edit, Upload, Send, Image, Video, File, 
   Users, MessageCircle, Plus, Play, MoreVertical,
   PencilLine, Trash 
 } from 'lucide-react';
-import { useState, useRef, useEffect } from 'react';
+import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { toast } from 'sonner';
-import { Database } from '@/integrations/supabase/types';
+import { Label } from "@/components/ui/label";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter 
 } from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useAuth } from '@/hooks/useAuth';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
+import { Database } from '@/integrations/supabase/types';
 
 type Profile = Database['public']['Tables']['profiles']['Row'];
 type Post = Database['public']['Tables']['posts']['Row'];
 type VideoType = Database['public']['Tables']['videos']['Row'];
-
 type FollowWithProfile = Database['public']['Tables']['follows']['Row'] & {
   following_profile: Profile;
 };
@@ -42,8 +41,10 @@ type EditingPost = {
 const ProfileScreen = () => {
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
+  const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const mediaInputRef = useRef<HTMLInputElement>(null);
+    // State
   const [isEditing, setIsEditing] = useState(false);
   const [postContent, setPostContent] = useState('');
   const [isUploadingMedia, setIsUploadingMedia] = useState(false);
@@ -52,6 +53,8 @@ const ProfileScreen = () => {
   const [editingPost, setEditingPost] = useState<EditingPost | null>(null);
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [showEditProfileDialog, setShowEditProfileDialog] = useState(false);
+  const [showEditVideoDialog, setShowEditVideoDialog] = useState(false);
+  const [editingVideo, setEditingVideo] = useState<VideoType | null>(null);
   const [editProfileData, setEditProfileData] = useState<{
     username: string;
     full_name: string;
@@ -63,7 +66,6 @@ const ProfileScreen = () => {
     bio: '',
     specialty: ''
   });
-  const queryClient = useQueryClient();
 
   // Profile Query
   const { data: profile, isLoading } = useQuery({
@@ -296,6 +298,25 @@ const ProfileScreen = () => {
     }
   });
 
+  // Add deleteVideo mutation
+  const deleteVideo = useMutation({
+    mutationFn: async (videoId: string) => {
+      const { error } = await supabase
+        .from('videos')
+        .delete()
+        .eq('id', videoId);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['user-videos', user?.id] });
+      toast.success('Video deleted successfully');
+    },
+    onError: () => {
+      toast.error('Failed to delete video');
+    }
+  });
+
   const updatePost = useMutation({
     mutationFn: async (post: EditingPost) => {
       const { error } = await supabase
@@ -362,6 +383,30 @@ const ProfileScreen = () => {
     },
     onError: (error: Error) => {
       toast.error(`Failed to update profile: ${error.message}`);
+    }
+  });
+
+  // Add updateVideo mutation
+  const updateVideo = useMutation({
+    mutationFn: async (data: { id: string; title: string; description: string }) => {
+      const { error } = await supabase
+        .from('videos')
+        .update({
+          title: data.title,
+          description: data.description,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', data.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['user-videos', user?.id] });
+      setShowEditVideoDialog(false);
+      setEditingVideo(null);
+      toast.success('Video updated successfully!');
+    },
+    onError: () => {
+      toast.error('Failed to update video');
     }
   });
 
@@ -436,22 +481,6 @@ const ProfileScreen = () => {
     await updateProfile.mutateAsync(editProfileData);
   };
 
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="">
-          <div className="animate-pulse flex space-x-4">
-            <div className="rounded-full bg-gray-200 h-12 w-12"></div>
-            <div className="flex-1 space-y-2 py-1">
-              <div className="h-4 bg-gray-200 rounded w-3/4"></div>
-              <div className="h-4 bg-gray-200 rounded w-1/2"></div>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
@@ -462,7 +491,7 @@ const ProfileScreen = () => {
         {/* Profile Header Card */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden mb-8">
           {/* Cover Section */}
-          <div className="h-48 bg-gradient-to-r from-slate-200 to-slate-700 relative">
+          <div className="h-48 bg-gradient-to-r from-cyan-200 to-red-700 relative">
             <div className="absolute inset-0 bg-black/10"></div>
           </div>
           
@@ -541,7 +570,7 @@ const ProfileScreen = () => {
         </div>
 
         {/* Three Column Layout */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           {/* Connections Card */}
           <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
             <div className="flex items-center justify-between mb-6">
@@ -583,7 +612,8 @@ const ProfileScreen = () => {
 
           {/* Create Post Card */}
           <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
-            <h2 className="text-xl font-semibold text-gray-900 mb-6">Create Post</h2>
+            <h2 className="text-xl font-semibold text-gray-900 mb-6">
+              Create Post</h2>
             <div className="space-y-4">
               <Textarea
                 value={postContent}
@@ -636,178 +666,160 @@ const ProfileScreen = () => {
             </div>
           </div>
 
-          {/* My Videos Card */}
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-semibold text-gray-900 flex items-center">
-                <Video className="w-5 h-5 mr-2 text-gray-600" />
-                My Videos
-              </h2>
-              <span className="bg-slate-100 text-slate-700 px-3 py-1 rounded-full text-sm font-medium">
-                {userVideos?.length ?? 0}
-              </span>
-            </div>
-            <div className="space-y-3 max-h-80 overflow-y-auto">
-              {userVideos?.length === 0 ? (
-                <div className="text-center py-8 text-gray-500">
-                  <Video className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-                  <p>No videos yet</p>
-                  <Button 
-                    onClick={() => navigate('/create')}
-                    className="mt-3 text-sm"
-                    size="sm"
-                  >
-                    Create your first video
-                  </Button>
-                </div>
-              ) : (
-                userVideos?.map((video) => (
-                  <div key={video.id} className="flex items-start space-x-3 p-3 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer"
-                       onClick={() => navigate(`/video/${video.id}`)}>
-                    <div className="relative flex-shrink-0">
-                      {video.thumbnail_url ? (
-                        <img
-                          src={video.thumbnail_url}
-                          alt={video.title}
-                          className="w-16 h-12 rounded object-cover"
-                        />
-                      ) : (
-                        <div className="w-16 h-12 bg-gray-200 rounded flex items-center justify-center">
-                          <Play className="w-4 h-4 text-gray-400" />
-                        </div>
-                      )}
-                      <div className="absolute top-1 left-1">
-                        <span className={`px-1 py-0.5 rounded text-xs font-medium ${
-                          video.visibility === 'public' ? 'bg-green-100 text-green-800' :
-                          video.visibility === 'private' ? 'bg-blue-100 text-blue-800' :
-                          'bg-gray-100 text-gray-800'
-                        }`}>
-                          {video.visibility}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium text-gray-900 truncate text-sm">
-                        {video.title}
-                      </p>
-                      <div className="flex items-center space-x-2 text-xs text-gray-500 mt-1">
-                        <span>{video.views_count || 0} views</span>
-                        <span>•</span>
-                        <span>{new Date(video.created_at).toLocaleDateString()}</span>
-                      </div>
-                      {video.category && (
-                        <p className="text-xs text-gray-500 capitalize mt-1">
-                          {video.category}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
+
         </div>
 
-        {/* Recent Posts */}
+        {/* Recent Posts & Videos */}
         <div className="mt-8 bg-white rounded-2xl shadow-sm border border-gray-200 p-6">
-          <h2 className="text-xl font-semibold text-gray-900 mb-6">Recent Posts</h2>
+          <h2 className="text-xl font-semibold text-gray-900 mb-6">Recent Posts & Videos</h2>
           <div className="space-y-6">
-            {posts?.length === 0 ? (
+            {posts?.length === 0 && userVideos?.length === 0 ? (
               <div className="text-center py-12 text-gray-500">
                 <MessageCircle className="w-16 h-16 mx-auto mb-4 text-gray-300" />
-                <p className="text-lg font-medium mb-2">No posts yet</p>
-                <p>Share your first post to get started!</p>
+                <p className="text-lg font-medium mb-2">No content yet</p>
+                <p>Share your first post or video to get started!</p>
               </div>
             ) : (
-              posts?.map((post) => (
-                <div key={post.id} className="border border-gray-100 rounded-xl p-6 hover:border-gray-200 transition-colors">
-                  <div className="flex items-start space-x-4">
-                    <img
-                      src={profile?.avatar_url || "/placeholder.svg"}
-                      alt={profile?.full_name}
-                      className="w-12 h-12 rounded-full object-cover border border-gray-200"
-                    />
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center space-x-2">
-                          <p className="font-semibold text-gray-900">{profile?.full_name}</p>
-                          <span className="text-gray-400">•</span>
-                          <p className="text-sm text-gray-500">
-                            {new Date(post.created_at || '').toLocaleDateString('en-US', {
-                              month: 'short',
-                              day: 'numeric',
-                              year: 'numeric'
-                            })}
-                          </p>
+              [...(posts || []), ...(userVideos || [])].sort((a, b) => 
+                new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+              ).map((item) => {
+                const isVideo = 'video_url' in item;
+                return (
+                  <div key={item.id} className="border border-gray-100 rounded-xl p-6 hover:border-gray-200 transition-colors">
+                    <div className="flex items-start space-x-4">
+                      <img
+                        src={profile?.avatar_url || "/placeholder.svg"}
+                        alt={profile?.full_name}
+                        className="w-12 h-12 rounded-full object-cover border border-gray-200"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between mb-2">
+                          <div className="flex items-center space-x-2">
+                            <p className="font-semibold text-gray-900">{profile?.full_name}</p>
+                            <span className="text-gray-400">•</span>
+                            <p className="text-sm text-gray-500">
+                              {new Date(item.created_at || '').toLocaleDateString('en-US', {
+                                month: 'short',
+                                day: 'numeric',
+                                year: 'numeric'
+                              })}
+                            </p>
+                          </div>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                                <MoreVertical className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem
+                                onClick={() => {
+                                  if (isVideo) {
+                                    setEditingVideo(item as VideoType);
+                                    setShowEditVideoDialog(true);
+                                  } else {
+                                    setEditingPost(item as Post);
+                                    setShowEditDialog(true);
+                                  }
+                                }}
+                              >
+                                <PencilLine className="mr-2 h-4 w-4" />
+                                Edit
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                className="text-red-600"
+                                onClick={() => {
+                                  if (isVideo) {
+                                    deleteVideo.mutate(item.id);
+                                  } else {
+                                    deletePost.mutate(item.id);
+                                  }
+                                }}
+                              >
+                                <Trash className="mr-2 h-4 w-4" />
+                                Delete
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                         </div>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                              <MoreVertical className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem
-                              onClick={() => {
-                                setEditingPost(post);
-                                setShowEditDialog(true);
-                              }}
-                            >
-                              <PencilLine className="mr-2 h-4 w-4" />
-                              Edit
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              className="text-red-600"
-                              onClick={() => deletePost.mutate(post.id)}
-                            >
-                              <Trash className="mr-2 h-4 w-4" />
-                              Delete
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
+
+                        {isVideo ? (
+                          <div onClick={() => navigate(`/video/${item.id}`)} className="cursor-pointer">
+                            <h3 className="font-medium text-gray-900 mb-2">{(item as VideoType).title}</h3>
+                            {(item as VideoType).thumbnail_url && (
+                              <div className="relative mb-3">
+                                <img
+                                  src={(item as VideoType).thumbnail_url!}
+                                  alt={(item as VideoType).title}
+                                  className="w-full h-48 object-cover rounded-lg"
+                                />
+                                <div className="absolute top-2 left-2">
+                                  <span className={`px-2 py-1 rounded text-xs font-medium ${
+                                    (item as VideoType).visibility === 'public' ? 'bg-green-100 text-green-800' :
+                                    (item as VideoType).visibility === 'private' ? 'bg-blue-100 text-blue-800' :
+                                    'bg-gray-100 text-gray-800'
+                                  }`}>
+                                    {(item as VideoType).visibility}
+                                  </span>
+                                </div>
+                              </div>
+                            )}
+                            <p className="text-gray-600 text-sm mb-2">{(item as VideoType).description}</p>
+                            <div className="flex items-center space-x-2 text-xs text-gray-500">
+                              <span>{(item as VideoType).views_count || 0} views</span>
+                              {(item as VideoType).category && (
+                                <>
+                                  <span>•</span>
+                                  <span className="capitalize">{(item as VideoType).category}</span>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        ) : (
+                          <>
+                            <p className="text-gray-800 leading-relaxed mb-4">{(item as Post).content}</p>
+                            {(item as Post).media_url?.map((url, index) => {
+                              const type = (item as Post).media_type?.[index];
+                              if (type === 'image') {
+                                return (
+                                  <img
+                                    key={url}
+                                    src={url}
+                                    alt="Post attachment"
+                                    className="rounded-lg max-h-96 w-full object-cover mb-4"
+                                  />
+                                );
+                              }
+                              if (type === 'video') {
+                                return (
+                                  <video
+                                    key={url}
+                                    src={url}
+                                    controls
+                                    className="rounded-lg max-h-96 w-full mb-4"
+                                  />
+                                );
+                              }
+                              return (
+                                <a
+                                  key={url}
+                                  href={url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="flex items-center space-x-2 text-blue-600 hover:underline"
+                                >
+                                  <File className="h-4 w-4" />
+                                  <span>Attached File</span>
+                                </a>
+                              );
+                            })}
+                          </>
+                        )}
                       </div>
-                      <p className="text-gray-800 leading-relaxed mb-4">{post.content}</p>
-                      
-                      {/* Media Preview */}
-                      {post.media_url?.map((url, index) => {
-                        const type = post.media_type?.[index];
-                        if (type === 'image') {
-                          return (
-                            <img
-                              key={url}
-                              src={url}
-                              alt="Post attachment"
-                              className="rounded-lg max-h-96 w-full object-cover mb-4"
-                            />
-                          );
-                        }
-                        if (type === 'video') {
-                          return (
-                            <video
-                              key={url}
-                              src={url}
-                              controls
-                              className="rounded-lg max-h-96 w-full mb-4"
-                            />
-                          );
-                        }
-                        return (
-                          <a
-                            key={url}
-                            href={url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="flex items-center space-x-2 text-blue-600 hover:underline"
-                          >
-                            <File className="h-4 w-4" />
-                            <span>Attached File</span>
-                          </a>
-                        );
-                      })}
                     </div>
                   </div>
-                </div>
-              ))
+                );
+              })
             )}
           </div>
         </div>
@@ -944,6 +956,63 @@ const ProfileScreen = () => {
                 {updateProfile.isPending ? 'Saving...' : 'Save Changes'}
               </Button>
             </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Edit Video Dialog */}
+        <Dialog open={showEditVideoDialog} onOpenChange={setShowEditVideoDialog}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Edit Video</DialogTitle>
+            </DialogHeader>
+            <div className="p-4">
+              <div className="space-y-4">
+                <div>
+                  <Label htmlFor="videoTitle">Title</Label>
+                  <Input
+                    id="videoTitle"
+                    value={editingVideo?.title || ''}
+                    onChange={(e) => setEditingVideo(prev => 
+                      prev ? { ...prev, title: e.target.value } : null
+                    )}
+                    placeholder="Enter video title"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="videoDescription">Description</Label>
+                  <Textarea
+                    id="videoDescription"
+                    value={editingVideo?.description || ''}
+                    onChange={(e) => setEditingVideo(prev => 
+                      prev ? { ...prev, description: e.target.value } : null
+                    )}
+                    placeholder="Enter video description"
+                    className="min-h-[120px]"
+                  />
+                </div>
+              </div>
+              <div className="flex justify-end space-x-2 mt-4">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setShowEditVideoDialog(false);
+                    setEditingVideo(null);
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={() => editingVideo && updateVideo.mutate({
+                    id: editingVideo.id,
+                    title: editingVideo.title,
+                    description: editingVideo.description || ''
+                  })}
+                  disabled={!editingVideo?.title || updateVideo.isPending}
+                >
+                  {updateVideo.isPending ? 'Saving...' : 'Save Changes'}
+                </Button>
+              </div>
+            </div>
           </DialogContent>
         </Dialog>
       </div>
