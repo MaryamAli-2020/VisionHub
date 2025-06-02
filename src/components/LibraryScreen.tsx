@@ -125,7 +125,12 @@ const LibraryScreen = () => {
     // Here you would implement draft saving functionality
     console.log('Saving draft:', formData);
     // TODO: Add draft saving logic
+  };  const parseEventDate = (dateStr: string) => {
+    // Handle date format like "2025-06-15" or date ranges like "2025-06-15 - 2025-06-20"
+    const firstDate = dateStr.split('-')[0].trim(); // Get the first date in case of a range
+    return new Date(firstDate);
   };
+
   const filteredArticles = useMemo(() => {
     const query = searchQuery.toLowerCase();
     let filtered = newsAndEvents.filter(item => 
@@ -140,9 +145,9 @@ const LibraryScreen = () => {
     }
 
     return filtered.sort((a, b) => {
-      const dateA = new Date(a.date).getTime();
-      const dateB = new Date(b.date).getTime();
-      return sortOrder === 'newest' ? dateB - dateA : dateA - dateB;
+      const dateA = parseEventDate(a.date);
+      const dateB = parseEventDate(b.date);
+      return sortOrder === 'newest' ? dateB.getTime() - dateA.getTime() : dateA.getTime() - dateB.getTime();
     });
   }, [searchQuery, selectedCategory, sortOrder]);
 
@@ -150,9 +155,9 @@ const LibraryScreen = () => {
     return newsAndEvents
       .filter(item => item.category === 'Webinars')
       .sort((a, b) => {
-        const dateA = new Date(a.date).getTime();
-        const dateB = new Date(b.date).getTime();
-        return dateB - dateA; // Always show newest webinars first
+        const dateA = parseEventDate(a.date);
+        const dateB = parseEventDate(b.date);
+        return dateB.getTime() - dateA.getTime(); // Always show newest webinars first
       });
   }, []);
 
