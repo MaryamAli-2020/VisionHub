@@ -314,7 +314,7 @@ export type Database = {
           bio?: string | null
           created_at?: string | null
           full_name?: string | null
-          id?: string
+          id: string
           specialty?: string | null
           updated_at?: string | null
           username?: string | null
@@ -437,6 +437,40 @@ export type Database = {
           },
         ]
       }
+      video_views: {
+        Row: {
+          id: string;
+          video_id: string;
+          viewer_id: string;
+          created_at: string;
+        }
+        Insert: {
+          id?: string;
+          video_id: string;
+          viewer_id: string;
+          created_at?: string;
+        }
+        Update: {
+          id?: string;
+          video_id?: string;
+          viewer_id?: string;
+          created_at?: string;
+        }
+        Relationships: [
+          {
+            foreignKeyName: "video_views_video_id_fkey"
+            columns: ["video_id"]
+            referencedRelation: "videos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "video_views_viewer_id_fkey"
+            columns: ["viewer_id"]
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
     }
     Views: {
       [_ in never]: never
@@ -454,6 +488,23 @@ export type Database = {
         Args: { video_id: string }
         Returns: undefined
       }
+      increment_video_views: {
+        Args: {
+          video_id: string;
+          viewer_id: string;
+        };
+        Returns: void;
+      };
+      toggle_video_like: {
+        Args: {
+          video_id: string;
+          user_id: string;
+        };
+        Returns: {
+          liked: boolean;
+          likes_count: number;
+        };
+      };
     }
     Enums: {
       [_ in never]: never

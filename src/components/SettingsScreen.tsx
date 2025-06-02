@@ -14,11 +14,13 @@ import {
   HardDrive,
   Moon,
   Sun,
-  Languages
+  Languages,
+  LogOut,
+  Trash2
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Switch } from '@/components/ui/switch';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
@@ -31,10 +33,23 @@ import { LinkedAccountsScreen } from '@/components/settings/LinkedAccountsScreen
 import { MobileNumberScreen } from '@/components/settings/MobileNumberScreen';
 import { SavedArticlesScreen } from '@/components/settings/SavedArticlesScreen';
 import { StorageScreen } from '@/components/settings/StorageScreen';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { toast } from 'sonner';
+
 const SettingsScreen = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user } = useAuth();
+  const { user, signOut } = useAuth();
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 
   const { data: profile } = useQuery({
     queryKey: ['profile', user?.id],
@@ -105,6 +120,44 @@ const SettingsScreen = () => {
     },
   ];
 
+  const deleteAccount = useMutation({
+    mutationFn: async () => {
+      if (!user?.id) throw new Error('User not authenticated');
+
+      // First delete user data from profiles table
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .delete()
+        .eq('id', user.id);
+
+      if (profileError) throw profileError;
+
+      // Then delete the user account
+      const { error: authError } = await supabase.auth.admin.deleteUser(user.id);
+      
+      if (authError) throw authError;
+
+      await signOut();
+      navigate('/');
+    },
+    onError: (error: Error) => {
+      toast.error(`Failed to delete account: ${error.message}`);
+    }
+  });
+
+  const handleSignOut = async () => {
+    await signOut();
+    navigate('/');
+  };
+
+  const handleDeleteAccount = async () => {
+    try {
+      await deleteAccount.mutateAsync();
+    } catch (error) {
+      console.error('Error deleting account:', error);
+    }
+  };
+
   function renderMainSettings() {
     return (
       <>
@@ -163,6 +216,50 @@ const SettingsScreen = () => {
             ))}
           </div>
         </div>
+
+        {/* Account Actions */}
+        <div className="px-6 py-4">
+          <div className="space-y-4">
+            <Button
+              variant="outline"
+              className="w-full py-6 text-gray-700 hover:bg-gray-100 hover:text-gray-900"
+              onClick={handleSignOut}
+            >
+              <LogOut className="w-5 h-5 mr-2" />
+              Sign Out
+            </Button>
+            
+            <Button
+              variant="destructive"
+              className="w-full py-6"
+              onClick={() => setShowDeleteDialog(true)}
+            >
+              <Trash2 className="w-5 h-5 mr-2" />
+              Delete Account
+            </Button>
+          </div>
+        </div>
+
+        <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This action cannot be undone. This will permanently delete your account
+                and remove all your data from our servers.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleDeleteAccount}
+                className="bg-red-600 hover:bg-red-700 focus:ring-red-600"
+              >
+                {deleteAccount.isPending ? "Deleting..." : "Delete Account"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </>
     );
   }
@@ -221,6 +318,7 @@ const SettingsScreen = () => {
           <div className="text-gray-500">
             Content for {path.substring(1)} will be implemented soon.
           </div>
+          
         );
     }
   };
@@ -229,6 +327,8 @@ const SettingsScreen = () => {
     <div className="min-h-screen bg-gray-50">
       {renderSettingContent()}
     </div>
+
+    
   );
 };
 

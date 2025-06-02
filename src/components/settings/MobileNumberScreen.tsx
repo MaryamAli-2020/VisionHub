@@ -41,7 +41,10 @@ export function MobileNumberScreen() {
         updated_at: null,
         notification_preferences: null,
         privacy_settings: null,
-        theme_preference: null
+        theme_preference: null,
+        notification_messages: false,
+        notification_videos: false,
+        notification_interactions: false
       };
 
       if (error) {

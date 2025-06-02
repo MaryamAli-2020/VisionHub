@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, Plus, ChevronDown, Filter, SortDesc } from 'lucide-react';
@@ -7,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import { useDebounce } from '../hooks/useDebounce';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -30,13 +30,40 @@ const HomeScreen = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<SortOption>('latest');
   const [category, setCategory] = useState<CategoryOption>('all');
+  const debouncedSearchQuery = useDebounce(searchQuery, 300);
+
+  // Add profiles query
+  const { data: searchedProfiles, isLoading: isLoadingProfiles } = useQuery<Profile[]>({
+    queryKey: ['searched-profiles', debouncedSearchQuery],
+    queryFn: async () => {
+      if (!debouncedSearchQuery.startsWith('@')) return [];
+
+      const username = debouncedSearchQuery.slice(1); // Remove @ symbol
+      console.log('Searching profiles with username:', username);
+
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .ilike('username', `%${username}%`)
+        .limit(10);
+
+      if (error) {
+        console.error('Profile search error:', error);
+        throw error;
+      }
+
+      return data || [];
+    },
+    enabled: debouncedSearchQuery.startsWith('@')
+  });
 
   const { data: videos, isLoading } = useQuery<Video[]>({
-    queryKey: ['videos', searchQuery, sortBy, category],
+    queryKey: ['videos', debouncedSearchQuery, sortBy, category],
     queryFn: async () => {
-      console.log('Fetching videos with query params:', { searchQuery, sortBy, category });
+      console.log('Fetching videos with query params:', { searchQuery: debouncedSearchQuery, sortBy, category });
       
-      let query = supabase
+      // First check if we're searching by username
+      let videoQuery = supabase
         .from('videos')
         .select(`
           *,
@@ -53,29 +80,68 @@ const HomeScreen = () => {
         `)
         .eq('is_published', true);
 
-      // Apply search
-      if (searchQuery) {
-        query = query.or(`title.ilike.%${searchQuery}%,description.ilike.%${searchQuery}%`);
+      // Apply search based on type
+      if (debouncedSearchQuery) {
+        if (!debouncedSearchQuery.startsWith('@')) {
+          // Regular search by title or description
+          videoQuery = videoQuery.or(`title.ilike.%${debouncedSearchQuery}%,description.ilike.%${debouncedSearchQuery}%`);
+        } else {
+          // Username search
+          const username = debouncedSearchQuery.slice(1);
+          videoQuery = videoQuery.eq('profiles.username', username);
+            // Check follow status if user is logged in
+          if (user?.id) {
+            // First, get the profile ID of the searched user
+            const { data: searchedProfile } = await supabase
+              .from('profiles')
+              .select('id')
+              .eq('username', username)
+              .single();
+
+            if (searchedProfile) {
+              // Check if they follow each other
+              const { data: mutualFollow } = await supabase
+                .from('follows')
+                .select('*')
+                .or(`and(follower_id.eq.${user.id},following_id.eq.${searchedProfile.id}),and(follower_id.eq.${searchedProfile.id},following_id.eq.${user.id})`)
+                .limit(2);
+
+              // Only show all posts if they follow each other (mutual follow)
+              if (mutualFollow && mutualFollow.length === 2) {
+                videoQuery = videoQuery.neq('visibility', 'unlisted');
+              } else {
+                // If not mutual followers, only show public posts
+                videoQuery = videoQuery.eq('visibility', 'public');
+              }
+            } else {
+              // If profile not found, default to public posts
+              videoQuery = videoQuery.eq('visibility', 'public');
+            }
+          } else {
+            // If not logged in, only show public posts
+            videoQuery = videoQuery.eq('visibility', 'public');
+          }
+        }
       }
 
       // Apply category filter
       if (category !== 'all') {
-        query = query.eq('category', category);
+        videoQuery = videoQuery.eq('category', category);
       }
 
       // Apply sorting
       switch (sortBy) {
         case 'oldest':
-          query = query.order('created_at', { ascending: true });
+          videoQuery = videoQuery.order('created_at', { ascending: true });
           break;
         case 'popular':
-          query = query.order('views_count', { ascending: false });
+          videoQuery = videoQuery.order('views_count', { ascending: false });
           break;
         default:
-          query = query.order('created_at', { ascending: false });
+          videoQuery = videoQuery.order('created_at', { ascending: false });
       }
 
-      const { data, error } = await query;
+      const { data, error } = await videoQuery;
       
       if (error) {
         console.error('Video query error:', error);
@@ -135,7 +201,7 @@ const HomeScreen = () => {
         <div className="relative mb-6">
           <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
           <Input
-            placeholder="Search videos..."
+            placeholder="Search videos or @username to find users..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="pl-12 py-4 rounded-xl border-gray-200"
@@ -212,12 +278,13 @@ const HomeScreen = () => {
           <>
             {/* Featured Creators */}
             {profiles && profiles.length > 0 && (
-              <div className="mb-8">
-                <h2 className="text-xl font-bold mb-4">Featured Creators</h2>
+             <div className="mb-8">
+              <h2 className="text-xl font-bold mb-4">Featured Creators</h2>
+              <div className="flex">
                 <div className="flex space-x-4 overflow-x-auto pb-4">
                   {profiles.map((profile) => (
                     <div key={profile.id} className="flex-shrink-0 text-center">
-                      <div className="w-16 h-16 bg-gradient-to-r from-red-500 to-purple-500 rounded-xl mb-2 flex items-center justify-center relative">
+                      <div className="w-16 h-16 bg-gradient-to-r from-red-500 to-purple-500 rounded-xl mb-2 flex items-center justify-center relative mx-auto">
                         <img
                           src={profile.avatar_url || "/placeholder.svg?height=48&width=48"}
                           alt={profile.full_name || 'Creator'}
@@ -225,12 +292,13 @@ const HomeScreen = () => {
                         />
                         <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-white"></div>
                       </div>
-                      <p className="font-semibold text-sm">{profile.full_name || 'Creator'}</p>
-                      <p className="text-xs text-gray-500">{profile.specialty || 'Creator'}</p>
+                      <p className="font-semibold text-sm text-center">{profile.full_name || 'Creator'}</p>
+                      <p className="text-xs text-gray-500 text-center">{profile.specialty || 'Creator'}</p>
                     </div>
                   ))}
                 </div>
               </div>
+            </div>
             )}
 
             {/* Videos */}
@@ -333,6 +401,48 @@ const HomeScreen = () => {
               )}
             </div>
           </>
+        )}
+
+        {/* Searched Profiles Section */}
+        {searchQuery.startsWith('@') && (
+          <div className="mb-8">
+            <h2 className="text-xl font-bold mb-4">Users</h2>
+            {isLoadingProfiles ? (
+              <div className="space-y-4">
+                {[1, 2, 3].map((i) => (
+                  <div key={i} className="animate-pulse flex items-center space-x-4">
+                    <div className="w-12 h-12 bg-gray-300 rounded-full" />
+                    <div className="flex-1 space-y-2">
+                      <div className="h-4 bg-gray-300 rounded w-1/4" />
+                      <div className="h-3 bg-gray-300 rounded w-1/3" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : searchedProfiles && searchedProfiles.length > 0 ? (
+              <div className="space-y-4">
+                {searchedProfiles.map((profile) => (
+                  <div 
+                    key={profile.id}
+                    onClick={() => navigate(`/profile/${profile.username}`)}
+                    className="flex items-center space-x-4 p-4 rounded-xl border border-gray-100 hover:border-gray-200 cursor-pointer"
+                  >
+                    <img
+                      src={profile.avatar_url || "/placeholder.svg"}
+                      alt={profile.full_name || "User"}
+                      className="w-12 h-12 rounded-full object-cover border border-gray-200"
+                    />
+                    <div>
+                      <h3 className="font-semibold text-gray-900">{profile.full_name}</h3>
+                      <p className="text-sm text-gray-500">@{profile.username}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-gray-500 text-center py-4">No users found matching "{searchQuery}"</p>
+            )}
+          </div>
         )}
       </div>
     </div>

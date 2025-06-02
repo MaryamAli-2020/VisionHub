@@ -5,45 +5,57 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { v4 as uuidv4 } from 'uuid';
 import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'sonner';
 
-interface Profile {
-  id: string;
-  avatar_url: string | null;
-  username: string | null;
-  full_name: string | null;
-  specialty: string | null;
-}
-
+// Define the Video type based on your Supabase 'videos' table and included profile
 interface Video {
   id: string;
   title: string;
-  description: string | null;
-  video_url: string | null;
-  thumbnail_url: string | null;
-  views_count: number | null;
-  likes_count: number | null;
-  user_id: string | null;
-  created_at: string | null;
-  profiles: Profile | null;
+  description?: string;
+  video_url: string;
+  thumbnail_url?: string;
+  user_id: string;
+  likes_count?: number;
+  views_count?: number;
+  profiles?: {
+    id: string;
+    avatar_url?: string;
+    username?: string;
+    full_name?: string;
+    specialty?: string;
+  };
 }
 
+// Define the Comment type to match the structure returned by the comments query
 interface Comment {
   id: string;
+  video_id: string;
   user_id: string;
   content: string;
   created_at: string;
-  video_id: string;
-  profiles: Profile | null;
+  updated_at?: string;
+  profiles?: {
+    id: string;
+    avatar_url?: string | null;
+    username?: string | null;
+    full_name?: string | null;
+    specialty?: string | null;
+    bio?: string | null;
+    created_at?: string | null;
+    updated_at?: string | null;
+  } | null;
 }
 
 const VideoPlayer = () => {
   const navigate = useNavigate();
   const { id } = useParams();
   const { user } = useAuth();
-  const [commentText, setCommentText] = useState('');
   const queryClient = useQueryClient();
+  const [commentText, setCommentText] = useState('');
+  const [isLiked, setIsLiked] = useState(false);
+  const [hasViewedThisSession, setHasViewedThisSession] = useState(false);
 
   // Get current user's profile
   const { data: userProfile } = useQuery({
@@ -86,6 +98,100 @@ const VideoPlayer = () => {
     },
     enabled: !!id
   });
+
+  // Get or create viewer ID for view tracking
+  const getViewerId = () => {
+    if (user?.id) return user.id;
+    
+    let anonymousId = localStorage.getItem('anonymous_viewer_id');
+    if (!anonymousId) {
+      anonymousId = uuidv4();
+      localStorage.setItem('anonymous_viewer_id', anonymousId);
+    }
+    return anonymousId;
+  };
+  // Record unique view
+  const recordView = useMutation({
+    mutationFn: async () => {
+      if (!id) throw new Error('Video ID is required');
+      if (hasAlreadyViewed || hasViewedThisSession) {
+        console.log('View already recorded for this user/session');
+        return;
+      }
+      
+      const viewerId = user?.id || getViewerId();
+      console.log('Recording view for video:', id, 'viewer:', viewerId);
+      
+      // First, try to insert the view record
+      const { error: viewError } = await supabase
+        .from('video_views')
+        .insert({
+          video_id: id,
+          viewer_id: viewerId
+        });
+
+      if (viewError) {
+        console.error('Error inserting view:', viewError);
+        throw viewError;
+      }      // First get the current view count
+      const { data: currentVideo, error: getError } = await supabase
+        .from('videos')
+        .select('views_count')
+        .eq('id', id)
+        .single();
+      
+      if (getError) {
+        console.error('Error getting current view count:', getError);
+        throw getError;
+      }
+
+      // Then update with incremented count
+      const { error: updateError } = await supabase
+        .from('videos')
+        .update({ 
+          views_count: (currentVideo?.views_count || 0) + 1
+        })
+        .eq('id', id);
+      
+      if (updateError) {
+        console.error('Error updating view count:', updateError);
+        throw updateError;
+      }
+      
+      setHasViewedThisSession(true);
+      return true;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['video', id] });
+      queryClient.invalidateQueries({ queryKey: ['video-view', id] });
+    },
+    onError: (error: Error) => {
+      console.error('View recording error:', error);
+      toast.error('Failed to record view');
+    }
+  });
+
+  // Check if current user has already viewed this video
+  const { data: hasAlreadyViewed } = useQuery({
+    queryKey: ['video-view', id, getViewerId()],
+    queryFn: async () => {
+      if (!id) return false;
+      
+      const viewerId = getViewerId();
+      
+      const { data, error } = await supabase
+        .from('video_views')
+        .select('id')
+        .eq('video_id', id)
+        .eq('viewer_id', viewerId)
+        .single();
+
+      if (error && error.code !== 'PGRST116') throw error;
+      return !!data;
+    },
+    enabled: !!id
+  });
+
   // Fetch comments with user profiles
   const { data: comments = [] } = useQuery<Comment[]>({
     queryKey: ['video-comments', id],
@@ -119,31 +225,39 @@ const VideoPlayer = () => {
   });
 
   // Check if current user has liked the video
-  const { data: userLike } = useQuery({
+  const { data: likeStatus } = useQuery({
     queryKey: ['video-like', id, user?.id],
     queryFn: async () => {
+      if (!user?.id || !id) return { liked: false, likes_count: video?.likes_count || 0 };
+
       const { data, error } = await supabase
         .from('video_likes')
         .select('*')
         .eq('video_id', id)
-        .eq('user_id', user?.id)
+        .eq('user_id', user.id)
         .single();
 
       if (error && error.code !== 'PGRST116') throw error;
-      return data;
+
+      return { 
+        liked: !!data,
+        likes_count: video?.likes_count || 0
+      };
     },
-    enabled: !!id && !!user?.id
+    enabled: !!user?.id && !!id
   });
 
-  // Check if current user is subscribed to the creator
+  // Check if current user is subscribed to the video creator
   const { data: userSubscription } = useQuery({
     queryKey: ['user-subscription', video?.user_id, user?.id],
     queryFn: async () => {
+      if (!video?.user_id || !user?.id) return null;
+      
       const { data, error } = await supabase
         .from('follows')
         .select('*')
-        .eq('follower_id', user?.id)
-        .eq('following_id', video?.user_id)
+        .eq('follower_id', user.id)
+        .eq('following_id', video.user_id)
         .single();
 
       if (error && error.code !== 'PGRST116') throw error;
@@ -151,65 +265,31 @@ const VideoPlayer = () => {
     },
     enabled: !!video?.user_id && !!user?.id
   });
-
-  // Update views count
-  const updateViews = useMutation({
-    mutationFn: async () => {
-      const { error } = await supabase
-        .from('videos')
-        .update({
-          views_count: (video?.views_count || 0) + 1
-        })
-        .eq('id', id);
-
-      if (error) throw error;
-    }
-  });
+  // (Duplicate recordView definition removed)
 
   // Like/unlike video
   const toggleLike = useMutation({
     mutationFn: async () => {
       if (!user) throw new Error('Must be logged in to like videos');
+      if (!id) throw new Error('Video ID is required');
 
-      if (userLike) {
-        // Unlike
-        const { error } = await supabase
-          .from('video_likes')
-          .delete()
-          .eq('video_id', id)
-          .eq('user_id', user.id);
+      const { data, error } = await supabase.rpc('toggle_video_like', {
+        video_id: id,
+        user_id: user.id
+      });
 
-        if (error) throw error;
-
-        // Update likes count
-        await supabase
-          .from('videos')
-          .update({
-            likes_count: (video?.likes_count || 1) - 1
-          })
-          .eq('id', id);
-      } else {
-        // Like
-        const { error } = await supabase
-          .from('video_likes')
-          .insert({
-            video_id: id,
-            user_id: user.id
-          });
-
-        if (error) throw error;
-
-        // Update likes count
-        await supabase
-          .from('videos')
-          .update({
-            likes_count: (video?.likes_count || 0) + 1
-          })
-          .eq('id', id);
-      }
+      if (error) throw error;
+      return data as { liked: boolean; likes_count: number };
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['video', id] });
+    onSuccess: (data) => {
+      // Update local state immediately
+      setIsLiked(data.liked);
+      // Update video data in cache
+      queryClient.setQueryData(['video', id], (old: any) => ({
+        ...old,
+        likes_count: data.likes_count
+      }));
+      // Then invalidate queries to sync with server
       queryClient.invalidateQueries({ queryKey: ['video-like', id, user?.id] });
     },
     onError: (error: Error) => {
@@ -258,6 +338,7 @@ const VideoPlayer = () => {
   const addComment = useMutation({
     mutationFn: async (content: string) => {
       if (!user) throw new Error('Must be logged in to comment');
+      if (!id) throw new Error('Video ID is required');
 
       const { error } = await supabase
         .from('comments')
@@ -278,12 +359,19 @@ const VideoPlayer = () => {
     }
   });
 
-  // Update views when video loads
-  useEffect(() => {
-    if (video) {
-      updateViews.mutate();
+  // Handle video play - record unique view
+  const handleVideoPlay = async () => {
+    if (!hasAlreadyViewed && !hasViewedThisSession) {
+      recordView.mutate();
     }
-  }, [video?.id]);
+  };
+
+  // Update initial like status
+  useEffect(() => {
+    if (likeStatus) {
+      setIsLiked(likeStatus.liked);
+    }
+  }, [likeStatus]);
 
   return (
     <div className="min-h-screen bg-white">
@@ -309,6 +397,7 @@ const VideoPlayer = () => {
             controls
             className="w-full h-64 object-cover"
             poster={video.thumbnail_url || undefined}
+            onPlay={handleVideoPlay}
           />
         ) : (
           <div className="w-full h-64 bg-gray-200 flex items-center justify-center">
@@ -341,20 +430,23 @@ const VideoPlayer = () => {
                 </div>
               </div>
             </div>
+            
             <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-6 text-gray-500 text-sm">
-                <div className="flex items-center space-x-1">
-                  <Eye className="w-4 h-4" />
-                  <span>{video?.views_count || 0} views</span>
-                </div>
-                <button
+              <div className="flex items-center space-x-4">
+                <Button
+                  variant={isLiked ? "default" : "outline"}
+                  size="sm"
                   onClick={() => toggleLike.mutate()}
-                  disabled={!user}
-                  className={`flex items-center space-x-1 ${userLike ? 'text-red-500' : ''}`}
+                  disabled={!user?.id || toggleLike.isPending}
+                  className={isLiked ? "bg-red-500 hover:bg-red-600 text-white" : ""}
                 >
-                  <Heart className={`w-4 h-4 ${userLike ? 'fill-current' : ''}`} />
-                  <span>{video?.likes_count || 0} likes</span>
-                </button>
+                  <Heart className={`w-4 h-4 mr-2 ${isLiked ? 'fill-current' : ''}`} />
+                  {video?.likes_count || 0}
+                </Button>
+                <div className="flex items-center text-gray-600 text-sm">
+                  <Eye className="w-4 h-4 mr-1" />
+                  {video?.views_count || 0} views
+                </div>
               </div>
               {video?.user_id !== user?.id && (
                 <Button
@@ -419,17 +511,6 @@ const VideoPlayer = () => {
                   }
                 }}
               />
-              <Button 
-                className="bg-teal-400 hover:bg-teal-500 w-12 h-12 rounded-xl p-0"
-                onClick={() => {
-                  if (commentText.trim()) {
-                    addComment.mutate(commentText.trim());
-                  }
-                }}
-                disabled={!commentText.trim() || addComment.isPending}
-              >
-                <span className="text-white">→</span>
-              </Button>
             </div>
           ) : (
             <div className="text-center py-4 text-gray-500">
