@@ -15,6 +15,7 @@ import { MobileNumberScreen } from './settings/MobileNumberScreen';
 import { NotificationsScreen } from './settings/NotificationsScreen';
 import ViewFeed from './ViewFeed';
 import MessagesScreen from './MessagesScreen';
+import AuthScreen from './AuthScreen';
 
 const MainApp = () => {
   const navigate = useNavigate();

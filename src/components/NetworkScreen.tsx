@@ -14,7 +14,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Database } from '@/integrations/supabase/types';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+
 
 type Profile = Database['public']['Tables']['profiles']['Row'];
 type Video = Database['public']['Tables']['videos']['Row'];
@@ -213,14 +213,45 @@ const NetworkScreen = () => {
   }
 
   return (
-    <div className="min-h-screen bg-white">
-      {/* Header */}      <div className="px-6 pt-8 pb-6">
-        <Tabs defaultValue="network" className="w-full flex justify-center" onValueChange={(value) => value === 'home' ? navigate('/') : setActiveTab('network')}>
-          <TabsList className="w-full max-w-[400px] flex justify-center border-b mb-6">
-            <TabsTrigger value="home">Home</TabsTrigger>
-            <TabsTrigger value="network">Following</TabsTrigger>
-          </TabsList>
-        </Tabs>
+    <div className="min-h-screen bg-white">      {/* Header */}
+      <div className="px-6 pt-8 pb-6">
+        <div className="relative bg-white/80 backdrop-blur-sm rounded-2xl border border-white/50 p-2 mb-8 max-w-[400px] mx-auto">
+          {/* Background slider */}          <div
+            className={`absolute top-3 h-10 bg-gradient-to-r from-red-500 to-red-600 rounded-xl transition-all duration-200 ease-in-out`}
+            style={{
+              left: '50%',
+              width: '48%',
+              transform: 'translateX(0%)'
+            }}
+          />
+          
+          {/* Tab Buttons */}
+          <div className="relative flex z-10">
+            <button
+              onClick={() => {
+                setActiveTab('home');
+                navigate('/');
+              }}              className={`flex items-center justify-center gap-2 h-11 flex-1 rounded-xl text-sm font-medium transition-all duration-200`}
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+              </svg>
+              Home
+            </button>
+            <button
+              onClick={() => {
+                setActiveTab('network');
+                navigate('/network');
+              }}
+              className={`flex items-center justify-center gap-2 h-11 flex-1 rounded-xl text-sm font-medium transition-all duration-200 text-white`}
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+              </svg>
+              Following
+            </button>
+          </div>
+        </div>
         
         {/* Search */}
         <div className="relative mb-6">

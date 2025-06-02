@@ -538,15 +538,54 @@ const renderServiceRequestForm = () => (
       </div>
     </Card>
   </div>
-);
-  return (    <div className="min-h-screen bg-white">      <div className="max-w-[90%] mx-auto py-8">
-        <Tabs defaultValue="articles" className="w-full flex flex-col items-center">
-          <TabsList className="w-full max-w-[400px] flex justify-center border-b mb-8">
-            <TabsTrigger value="articles">News & Events</TabsTrigger>
-            <TabsTrigger value="webinars">Webinars</TabsTrigger>
-            <TabsTrigger value="service">Request Service</TabsTrigger>
-          </TabsList>
-
+);  return (
+    <div className="min-h-screen bg-white">
+      <div className="px-6 pt-8">
+        <div className="relative bg-white/80 backdrop-blur-sm rounded-2xl border border-white/50 p-2 mb-8 max-w-[400px] mx-auto">
+          {/* Background slider */}
+          <div
+            className={`absolute top-3 h-10 bg-gradient-to-r from-red-500 to-red-600 rounded-xl transition-all duration-200 ease-in-out`}
+            style={{
+              left: '0%',
+              width: '33.33%',
+              transform: `translateX(${activeTab === 'articles' ? '0%' : activeTab === 'webinars' ? '100%' : '200%'})`
+            }}
+          />
+          
+          {/* Tab Buttons */}
+          <div className="relative flex z-10">
+            <button
+              onClick={() => setActiveTab('articles')}
+              className={`flex items-center justify-center gap-2 h-11 flex-1 rounded-xl text-sm font-medium transition-all duration-200 ${
+                activeTab === 'articles' ? 'text-white' : ''
+              }`}
+            >
+              <FileText className="w-4 h-4" />
+              Articles
+            </button>
+            <button
+              onClick={() => setActiveTab('webinars')}
+              className={`flex items-center justify-center gap-2 h-11 flex-1 rounded-xl text-sm font-medium transition-all duration-200 ${
+                activeTab === 'webinars' ? 'text-white' : ''
+              }`}
+            >
+              <Radio className="w-4 h-4" />
+              Webinars
+            </button>
+            <button
+              onClick={() => setActiveTab('service')}
+              className={`flex items-center justify-center gap-2 h-11 flex-1 rounded-xl text-sm font-medium transition-all duration-200 ${
+                activeTab === 'service' ? 'text-white' : ''
+              }`}
+            >
+              <Send className="w-4 h-4" />
+              Services
+            </button>
+          </div>
+        </div>
+      </div>
+      <div className="max-w-[90%] mx-auto pb-8">
+        <Tabs value={activeTab} className="w-full flex flex-col items-center" onValueChange={(value) => setActiveTab(value as 'articles' | 'webinars' | 'service')}>
           <TabsContent value="articles">
             {/* Existing News & Events content */}
             <div className="space-y-12">
