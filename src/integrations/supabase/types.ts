@@ -9,42 +9,6 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
-      saved_articles: {
-        Row: {
-          id: string;
-          user_id: string;
-          title: string;
-          description: string | null;
-          article_url: string;
-          article_type: 'article' | 'tutorial' | 'news';
-          thumbnail_url: string | null;
-          created_at: string;
-          updated_at: string;
-        }
-        Insert: {
-          id?: string;
-          user_id: string;
-          title: string;
-          description?: string | null;
-          article_url: string;
-          article_type: string;
-          thumbnail_url?: string | null;
-          created_at?: string;
-          updated_at?: string;
-        }
-        Update: {
-          id?: string;
-          user_id?: string;
-          title?: string;
-          description?: string | null;
-          article_url?: string;
-          article_type?: string;
-          thumbnail_url?: string | null;
-          created_at?: string;
-          updated_at?: string;
-        }
-        Relationships: [];
-      }
       articles: {
         Row: {
           category: string | null
@@ -152,38 +116,30 @@ export type Database = {
       }
       linked_accounts: {
         Row: {
+          created_at: string | null
           id: string
-          user_id: string
           provider: string
+          provider_account_data: Json | null
           provider_user_id: string
-          provider_account_data: Json
-          created_at: string
+          user_id: string | null
         }
         Insert: {
+          created_at?: string | null
           id?: string
-          user_id: string
           provider: string
+          provider_account_data?: Json | null
           provider_user_id: string
-          provider_account_data?: Json
-          created_at?: string
+          user_id?: string | null
         }
         Update: {
+          created_at?: string | null
           id?: string
-          user_id?: string
           provider?: string
+          provider_account_data?: Json | null
           provider_user_id?: string
-          provider_account_data?: Json
-          created_at?: string
+          user_id?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "linked_accounts_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          }
-        ]
+        Relationships: []
       }
       post_comments: {
         Row: {
@@ -314,37 +270,103 @@ export type Database = {
           bio?: string | null
           created_at?: string | null
           full_name?: string | null
-          id: string
+          id?: string
           specialty?: string | null
           updated_at?: string | null
           username?: string | null
         }
         Relationships: []
       }
+      saved_articles: {
+        Row: {
+          article_type: string | null
+          article_url: string
+          created_at: string | null
+          description: string | null
+          id: string
+          thumbnail_url: string | null
+          title: string
+          user_id: string | null
+        }
+        Insert: {
+          article_type?: string | null
+          article_url: string
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          thumbnail_url?: string | null
+          title: string
+          user_id?: string | null
+        }
+        Update: {
+          article_type?: string | null
+          article_url?: string
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          thumbnail_url?: string | null
+          title?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       user_settings: {
         Row: {
+          color_scheme: string | null
           created_at: string | null
+          dark_mode: boolean | null
+          high_contrast: boolean | null
           id: string
+          language: string | null
+          mobile_number: string | null
+          notification_email: boolean | null
+          notification_marketing: boolean | null
           notification_preferences: Json | null
+          notification_push: boolean | null
           privacy_settings: Json | null
+          reduce_motion: boolean | null
+          storage_usage_bytes: number | null
+          theme: string | null
           theme_preference: string | null
           updated_at: string | null
           user_id: string
         }
         Insert: {
+          color_scheme?: string | null
           created_at?: string | null
+          dark_mode?: boolean | null
+          high_contrast?: boolean | null
           id?: string
+          language?: string | null
+          mobile_number?: string | null
+          notification_email?: boolean | null
+          notification_marketing?: boolean | null
           notification_preferences?: Json | null
+          notification_push?: boolean | null
           privacy_settings?: Json | null
+          reduce_motion?: boolean | null
+          storage_usage_bytes?: number | null
+          theme?: string | null
           theme_preference?: string | null
           updated_at?: string | null
           user_id: string
         }
         Update: {
+          color_scheme?: string | null
           created_at?: string | null
+          dark_mode?: boolean | null
+          high_contrast?: boolean | null
           id?: string
+          language?: string | null
+          mobile_number?: string | null
+          notification_email?: boolean | null
+          notification_marketing?: boolean | null
           notification_preferences?: Json | null
+          notification_push?: boolean | null
           privacy_settings?: Json | null
+          reduce_motion?: boolean | null
+          storage_usage_bytes?: number | null
+          theme?: string | null
           theme_preference?: string | null
           updated_at?: string | null
           user_id?: string
@@ -371,6 +393,35 @@ export type Database = {
           video_id?: string
         }
         Relationships: []
+      }
+      video_views: {
+        Row: {
+          id: string
+          video_id: string | null
+          viewed_at: string | null
+          viewer_id: string
+        }
+        Insert: {
+          id?: string
+          video_id?: string | null
+          viewed_at?: string | null
+          viewer_id: string
+        }
+        Update: {
+          id?: string
+          video_id?: string | null
+          viewed_at?: string | null
+          viewer_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "video_views_video_id_fkey"
+            columns: ["video_id"]
+            isOneToOne: false
+            referencedRelation: "videos"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       videos: {
         Row: {
@@ -437,40 +488,6 @@ export type Database = {
           },
         ]
       }
-      video_views: {
-        Row: {
-          id: string;
-          video_id: string;
-          viewer_id: string;
-          created_at: string;
-        }
-        Insert: {
-          id?: string;
-          video_id: string;
-          viewer_id: string;
-          created_at?: string;
-        }
-        Update: {
-          id?: string;
-          video_id?: string;
-          viewer_id?: string;
-          created_at?: string;
-        }
-        Relationships: [
-          {
-            foreignKeyName: "video_views_video_id_fkey"
-            columns: ["video_id"]
-            referencedRelation: "videos"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "video_views_viewer_id_fkey"
-            columns: ["viewer_id"]
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-          }
-        ]
-      }
     }
     Views: {
       [_ in never]: never
@@ -489,22 +506,13 @@ export type Database = {
         Returns: undefined
       }
       increment_video_views: {
-        Args: {
-          video_id: string;
-          viewer_id: string;
-        };
-        Returns: void;
-      };
+        Args: { video_id: string; viewer_id: string }
+        Returns: undefined
+      }
       toggle_video_like: {
-        Args: {
-          video_id: string;
-          user_id: string;
-        };
-        Returns: {
-          liked: boolean;
-          likes_count: number;
-        };
-      };
+        Args: { video_id: string; user_id: string }
+        Returns: Json
+      }
     }
     Enums: {
       [_ in never]: never
@@ -526,7 +534,7 @@ export type Tables<
   }
     ? keyof (Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
         Database[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never,
+    : never = never,
 > = DefaultSchemaTableNameOrOptions extends { schema: keyof Database }
   ? (Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
       Database[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {

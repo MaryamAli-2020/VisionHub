@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ChevronLeft, Eye, Heart } from 'lucide-react';
@@ -110,66 +111,6 @@ const VideoPlayer = () => {
     }
     return anonymousId;
   };
-  // Record unique view
-  const recordView = useMutation({
-    mutationFn: async () => {
-      if (!id) throw new Error('Video ID is required');
-      if (hasAlreadyViewed || hasViewedThisSession) {
-        console.log('View already recorded for this user/session');
-        return;
-      }
-      
-      const viewerId = user?.id || getViewerId();
-      console.log('Recording view for video:', id, 'viewer:', viewerId);
-      
-      // First, try to insert the view record
-      const { error: viewError } = await supabase
-        .from('video_views')
-        .insert({
-          video_id: id,
-          viewer_id: viewerId
-        });
-
-      if (viewError) {
-        console.error('Error inserting view:', viewError);
-        throw viewError;
-      }      // First get the current view count
-      const { data: currentVideo, error: getError } = await supabase
-        .from('videos')
-        .select('views_count')
-        .eq('id', id)
-        .single();
-      
-      if (getError) {
-        console.error('Error getting current view count:', getError);
-        throw getError;
-      }
-
-      // Then update with incremented count
-      const { error: updateError } = await supabase
-        .from('videos')
-        .update({ 
-          views_count: (currentVideo?.views_count || 0) + 1
-        })
-        .eq('id', id);
-      
-      if (updateError) {
-        console.error('Error updating view count:', updateError);
-        throw updateError;
-      }
-      
-      setHasViewedThisSession(true);
-      return true;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['video', id] });
-      queryClient.invalidateQueries({ queryKey: ['video-view', id] });
-    },
-    onError: (error: Error) => {
-      console.error('View recording error:', error);
-      toast.error('Failed to record view');
-    }
-  });
 
   // Check if current user has already viewed this video
   const { data: hasAlreadyViewed } = useQuery({
@@ -186,10 +127,77 @@ const VideoPlayer = () => {
         .eq('viewer_id', viewerId)
         .single();
 
-      if (error && error.code !== 'PGRST116') throw error;
+      if (error && error.code !== 'PGRST116') {
+        console.error('Error checking view status:', error);
+        return false;
+      }
       return !!data;
     },
     enabled: !!id
+  });
+
+  // Record unique view
+  const recordView = useMutation({
+    mutationFn: async () => {
+      if (!id) throw new Error('Video ID is required');
+      if (hasAlreadyViewed || hasViewedThisSession) {
+        console.log('View already recorded for this user/session');
+        return;
+      }
+      
+      const viewerId = getViewerId();
+      console.log('Recording view for video:', id, 'viewer:', viewerId);
+      
+      // First, try to insert the view record
+      const { error: viewError } = await supabase
+        .from('video_views')
+        .insert({
+          video_id: id,
+          viewer_id: viewerId
+        });
+
+      if (viewError) {
+        console.error('Error inserting view:', viewError);
+        throw viewError;
+      }
+
+      // Then get the current view count and increment it
+      const { data: currentVideo, error: getError } = await supabase
+        .from('videos')
+        .select('views_count')
+        .eq('id', id)
+        .single();
+      
+      if (getError) {
+        console.error('Error getting current view count:', getError);
+        throw getError;
+      }
+
+      // Update with incremented count
+      const { error: updateError } = await supabase
+        .from('videos')
+        .update({ 
+          views_count: (currentVideo?.views_count || 0) + 1
+        })
+        .eq('id', id);
+      
+      if (updateError) {
+        console.error('Error updating view count:', updateError);
+        throw updateError;
+      }
+      
+      setHasViewedThisSession(true);
+      console.log('View recorded successfully');
+      return true;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['video', id] });
+      queryClient.invalidateQueries({ queryKey: ['video-view', id] });
+    },
+    onError: (error: Error) => {
+      console.error('View recording error:', error);
+      // Don't show toast for view errors as they're not critical to user experience
+    }
   });
 
   // Fetch comments with user profiles
@@ -265,7 +273,6 @@ const VideoPlayer = () => {
     },
     enabled: !!video?.user_id && !!user?.id
   });
-  // (Duplicate recordView definition removed)
 
   // Like/unlike video
   const toggleLike = useMutation({
@@ -361,8 +368,12 @@ const VideoPlayer = () => {
 
   // Handle video play - record unique view
   const handleVideoPlay = async () => {
+    console.log('Video play event triggered');
     if (!hasAlreadyViewed && !hasViewedThisSession) {
+      console.log('Recording view...');
       recordView.mutate();
+    } else {
+      console.log('View already recorded, skipping');
     }
   };
 
@@ -372,6 +383,19 @@ const VideoPlayer = () => {
       setIsLiked(likeStatus.liked);
     }
   }, [likeStatus]);
+
+  // Auto-record view on component mount for better UX
+  useEffect(() => {
+    if (video && !hasAlreadyViewed && !hasViewedThisSession) {
+      // Add a small delay to ensure the component is fully loaded
+      const timer = setTimeout(() => {
+        console.log('Auto-recording view on component mount');
+        recordView.mutate();
+      }, 1000);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [video, hasAlreadyViewed, hasViewedThisSession]);
 
   return (
     <div className="min-h-screen bg-white">
