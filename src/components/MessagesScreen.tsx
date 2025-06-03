@@ -5,7 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { 
   ArrowLeft, Send, Search, MessageCircle, Users, 
-  MoreVertical, Phone, Video, Info
+  MoreVertical, Phone, Video, Info, Menu, X
 } from 'lucide-react';
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { Input } from '@/components/ui/input';
@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { PostgrestError } from '@supabase/supabase-js';
 import { useToast } from "@/components/ui/use-toast";
+import { useMediaQuery } from '@/hooks/useMediaQuery';
 
 type Tables = Database['public']['Tables'];
 type TableRow<T extends keyof Tables> = Tables[T]['Row'];
@@ -61,36 +62,94 @@ export default function MessagesScreen() {
   const [searchTerm, setSearchTerm] = useState('');
   const [showNewChatDialog, setShowNewChatDialog] = useState(false);
   const [selectedParticipantId, setSelectedParticipantId] = useState<string | null>(null);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messageInputRef = useRef<HTMLInputElement>(null);
   const queryClient = useQueryClient();
+  const isMobile = useMediaQuery('(max-width: 768px)');
 
   // Enhanced conversations query with better error handling
   const { data: conversations, isLoading: conversationsLoading, error: conversationsError } = useQuery<ConversationWithDetails[], PostgrestError>({
     queryKey: ['conversations', user?.id],
     queryFn: async () => {
-      if (!user?.id) throw new Error('User not authenticated');
-
-      const { data, error } = await supabase
+      if (!user?.id) throw new Error('User not authenticated');      // First get conversations
+      const { data: conversations, error: conversationsError } = await supabase
         .from('conversations')
         .select('*')
         .order('updated_at', { ascending: false });
 
-      if (error) {
-        console.error('Error fetching conversations:', error);
-        throw error;
+      if (conversationsError) {
+        console.error('Error fetching conversations:', conversationsError);
+        throw conversationsError;
       }
 
-      // Ensure the data matches ConversationWithDetails type
-      return (
-        data?.map((raw: any) => ({
-          ...raw,
-          participant_profiles: raw.participant_profiles ?? [],
-          unread_count: raw.unread_count ?? 0,
-          last_message: raw.last_message ?? undefined,
-          messages: raw.messages ?? undefined,
-        })) ?? []
-      );
+      // Then get the most recent message for each conversation
+      const { data: messages, error: messagesError } = await supabase
+        .from('messages')
+        .select(`
+          id,
+          conversation_id,
+          content,
+          sender_id,
+          created_at,
+          read_at
+        `)
+        .in('conversation_id', conversations?.map(c => c.id) || [])
+        .order('created_at', { ascending: false });
+
+      if (messagesError) {
+        console.error('Error fetching messages:', messagesError);
+        throw messagesError;
+      }
+
+      // Group messages by conversation
+      const messagesByConversation = messages?.reduce((acc: { [key: string]: any[] }, msg) => {
+        if (!acc[msg.conversation_id]) {
+          acc[msg.conversation_id] = [];
+        }
+        acc[msg.conversation_id].push(msg);
+        return acc;
+      }, {});      // Get all unique participant IDs from conversations
+      const participantIds = new Set<string>();
+      conversations?.forEach(conv => {
+        conv.participant_ids?.forEach(id => participantIds.add(id));
+      });
+
+      // Fetch profiles for all participants
+      const { data: profiles, error: profilesError } = await supabase
+        .from('profiles')
+        .select('id, username, full_name, avatar_url, specialty')
+        .in('id', Array.from(participantIds));
+
+      if (profilesError) {
+        console.error('Error fetching profiles:', profilesError);
+        throw profilesError;
+      }
+
+      // Create a map of profiles for quick lookup
+      const profilesMap = new Map(profiles?.map(p => [p.id, p]));
+
+      // Process and transform the data
+      return conversations?.map(conv => {
+        const conversationMessages = messagesByConversation?.[conv.id] || [];
+        const lastMessage = conversationMessages[0];
+        const unreadCount = conversationMessages.filter(msg => 
+          msg.sender_id !== user?.id && !msg.read_at
+        ).length;
+
+        // Map participant_ids to full profile objects
+        const participant_profiles = conv.participant_ids
+          ?.map(id => profilesMap.get(id))
+          .filter(Boolean) || [];
+
+        return {
+          ...conv,
+          participant_profiles,
+          last_message: lastMessage,
+          unread_count: unreadCount,
+          messages: undefined, // We don't need to store all messages here
+        };
+      }) || [];
     },
     enabled: !!user?.id,
     staleTime: 30000, // 30 seconds
@@ -195,8 +254,7 @@ export default function MessagesScreen() {
     mutationFn: async (participantId: string) => {
       if (!user?.id) throw new Error('Not authenticated');
       
-      try {
-        // First try to find an existing conversation - simplified query without messages
+      try {        // First try to find an existing conversation
         const { data: existingConversations, error: searchError } = await supabase
           .from('conversations')
           .select('*')
@@ -204,37 +262,13 @@ export default function MessagesScreen() {
           .filter('participant_ids', 'cs', `{${participantId}}`)
           .limit(1);
 
-        if (searchError) {
-          console.error('Search error:', searchError);
-          throw new Error('Failed to check existing conversations');
-        }
+        if (searchError) throw searchError;
 
-        const existingConversation = existingConversations?.[0];
-        let conversationToReturn: ConversationWithDetails;
-        
-        if (existingConversation) {
-          console.log('Found existing conversation:', existingConversation);
-          // Fetch participant profiles for existing conversation
-          const { data: existingProfiles, error: existingProfilesError } = await supabase
-            .from('profiles')
-            .select('id, username, full_name, avatar_url, specialty')
-            .in('id', [user.id, participantId]);
-
-          if (existingProfilesError) {
-            console.error('Profile fetch error:', existingProfilesError);
-            throw existingProfilesError;
-          }
-
-          conversationToReturn = {
-            ...existingConversation,
-            participant_profiles: existingProfiles || [],
-            last_message: undefined,
-            unread_count: 0,
-            messages: []
-          };
+        let conversation;
+        if (existingConversations?.[0]) {
+          conversation = existingConversations[0];
         } else {
-          console.log('Creating new conversation between', user.id, 'and', participantId);
-          // Create new conversation if none exists
+          // Create new conversation
           const { data: newConversation, error: createError } = await supabase
             .from('conversations')
             .insert({
@@ -245,52 +279,53 @@ export default function MessagesScreen() {
             .select()
             .single();
 
-          if (createError) {
-            console.error('Create error:', createError);
-            throw new Error('Failed to create conversation');
-          }
-
-          console.log('Created new conversation:', newConversation);
-          // Fetch participant profiles for new conversation
-          const { data: newProfiles, error: newProfilesError } = await supabase
-            .from('profiles')
-            .select('id, username, full_name, avatar_url, specialty')
-            .in('id', [user.id, participantId]);
-
-          if (newProfilesError) {
-            console.error('Profile fetch error:', newProfilesError);
-            throw newProfilesError;
-          }
-
-          conversationToReturn = {
-            ...newConversation,
-            participant_profiles: newProfiles || [],
-            unread_count: 0,
-            messages: []
-          };
+          if (createError) throw createError;
+          conversation = newConversation;
         }
 
-        return conversationToReturn;
+        // Fetch profiles for the conversation participants
+        const { data: profiles, error: profilesError } = await supabase
+          .from('profiles')
+          .select('id, username, full_name, avatar_url, specialty')
+          .in('id', conversation.participant_ids);
+
+        if (profilesError) throw profilesError;
+
+        return {
+          ...conversation,
+          participant_profiles: profiles || [],
+          last_message: undefined,
+          unread_count: 0,
+          messages: []
+        };
       } catch (error) {
         console.error('Error creating/getting conversation:', error);
         throw error;
       }
     },
     onSuccess: (data) => {
+      // Close dialog and reset search state
       setShowNewChatDialog(false);
       setSelectedParticipantId(null);
       setSearchTerm('');
       
+      // Update conversations list (add to beginning)
       queryClient.setQueryData(['conversations', user?.id], (old: ConversationWithDetails[] | undefined) => {
-        if (!old) return [data];
-        const filtered = old.filter(c => c.id !== data.id);
+        const filtered = old?.filter(c => c.id !== data.id) || [];
         return [data, ...filtered];
       });
       
+      // Select the conversation and update UI
       setSelectedConversation(data.id);
+      
+      // Mobile optimizations
+      if (isMobile) {
+        setSidebarOpen(false);
+      }
+
       toast({
         title: "Success",
-        description: "Conversation ready"
+        description: "Chat ready"
       });
     },
     onError: (error) => {
@@ -462,6 +497,18 @@ export default function MessagesScreen() {
     }
   }, [selectedConversation]);
 
+  // Auto-open sidebar on desktop, close on mobile by default
+  useEffect(() => {
+    setSidebarOpen(!isMobile);
+  }, [isMobile]);
+
+  // When selecting a conversation on mobile, close the sidebar
+  useEffect(() => {
+    if (isMobile && selectedConversation) {
+      setSidebarOpen(false);
+    }
+  }, [selectedConversation, isMobile]);
+
   // Enhanced message sending handler
   const handleSendMessage = useCallback(() => {
     if (!messageText.trim() || !selectedConversation || sendMessage.isPending) return;
@@ -478,11 +525,25 @@ export default function MessagesScreen() {
     }
   }, [handleSendMessage]);
 
+  const toggleSidebar = useCallback(() => {
+    setSidebarOpen(prev => !prev);
+  }, []);
+
+  const handleConversationSelect = useCallback((conversationId: string) => {
+    setSelectedConversation(conversationId);
+    if (isMobile) {
+      setSidebarOpen(false);
+    }
+  }, [isMobile]);
+
   const filteredConnections = mutualConnections?.filter(connection => 
     connection.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     connection.username?.toLowerCase().includes(searchTerm.toLowerCase())
   ) || [];
 
+  // Calculate total unread count for badge
+  const totalUnreadCount = conversations?.reduce((total, conv) => total + (conv.unread_count || 0), 0) || 0;
+  
   // Handle loading states
   if (conversationsLoading && !conversations) {
     return (
@@ -500,7 +561,7 @@ export default function MessagesScreen() {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <p className="text-red-600 mb-4">Failed to load conversations</p>
+          <p className="text-red-600 mb-4">{conversationsError.message || 'Failed to load conversations'}</p>
           <Button onClick={() => window.location.reload()}>
             Try Again
           </Button>
@@ -510,46 +571,41 @@ export default function MessagesScreen() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <div className="bg-white border-b border-gray-200 px-6 py-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center space-x-4">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => navigate(-1)}
-              className="p-2"
-            >
-              <ArrowLeft className="w-5 h-5" />
-            </Button>
-            <h1 className="text-2xl font-bold text-gray-900">Messages</h1>
-          </div>
-          <Button
-            onClick={() => setShowNewChatDialog(true)}
-            className="bg-slate-800 hover:bg-slate-700 text-white"
-            disabled={connectionsLoading}
-          >
-            <MessageCircle className="w-4 h-4 mr-2" />
-            New Chat
-          </Button>
-        </div>
-      </div>
+    <div className="min-h-screen bg-gray-50 overflow-hidden">
+      
 
-      <div className="flex h-[calc(100vh-80px)]">
+      <div className="flex h-[calc(100vh-56px)] md:h-screen relative">
         {/* Conversations Sidebar */}
-        <div className="w-80 bg-white border-r border-gray-200 flex flex-col">
+        <div 
+          className={`
+            ${sidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'} 
+            w-full md:w-80 lg:w-96 bg-white border-r border-gray-200 
+            absolute md:relative inset-y-0 left-0 z-30
+            transform transition-transform duration-300 ease-in-out
+            flex flex-col
+          `}
+        >
           <div className="p-4 border-b border-gray-200">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-semibold text-gray-900">Chats</h2>
-              <Button
-                onClick={() => setShowNewChatDialog(true)}
-                variant="outline"
-                size="icon"
-                disabled={connectionsLoading}
-              >
-                <MessageCircle className="h-5 w-5" />
-              </Button>
+              <div className="flex space-x-2">
+                <Button
+                  onClick={() => setShowNewChatDialog(true)}
+                  variant="outline"
+                  size="icon"
+                  disabled={connectionsLoading}
+                >
+                  <MessageCircle className="h-5 w-5" />
+                </Button>
+                <Button
+                  onClick={toggleSidebar}
+                  variant="ghost"
+                  size="icon"
+                  className="md:hidden"
+                >
+                  <X className="h-5 w-5" />
+                </Button>
+              </div>
             </div>
           </div>
 
@@ -579,7 +635,7 @@ export default function MessagesScreen() {
                   return (
                     <div
                       key={conversation.id}
-                      onClick={() => setSelectedConversation(conversation.id)}
+                      onClick={() => handleConversationSelect(conversation.id)}
                       className={`p-4 cursor-pointer hover:bg-gray-50 transition-colors ${
                         selectedConversation === conversation.id ? 'bg-slate-50 border-r-2 border-slate-500' : ''
                       }`}
@@ -591,7 +647,7 @@ export default function MessagesScreen() {
                             alt={participant.full_name || "User"}
                             className="w-12 h-12 rounded-full object-cover"
                           />
-                          {conversation.unread_count && conversation.unread_count > 0 && (
+                          {conversation.unread_count > 0 && (
                             <div className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
                               {conversation.unread_count > 99 ? '99+' : conversation.unread_count}
                             </div>
@@ -620,170 +676,195 @@ export default function MessagesScreen() {
           </div>
         </div>
 
+        {/* Sidebar Overlay (Mobile) */}
+        {sidebarOpen && (
+          <div 
+            className="md:hidden fixed inset-0 bg-black bg-opacity-30 z-20"
+            onClick={() => setSidebarOpen(false)}
+            aria-hidden="true"
+          />
+        )}
+
         {/* Chat Area */}
-        {selectedConversation && otherParticipant ? (
-          <div className="flex-1 flex flex-col">
-            {/* Chat Header */}
-            <div className="bg-white border-b border-gray-200 p-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-3">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="md:hidden"
-                    onClick={() => setSelectedConversation(null)}
-                  >
-                    <ArrowLeft className="h-5 w-5" />
-                  </Button>
-                  <img
-                    src={otherParticipant.avatar_url || "/placeholder.svg"}
-                    alt={otherParticipant.full_name || "User"}
-                    className="w-10 h-10 rounded-full object-cover"
-                  />
-                  <div>
-                    <h2 className="font-semibold text-gray-900">
-                      {otherParticipant.full_name || otherParticipant.username}
-                    </h2>
+        <div className={`
+          flex-1 flex flex-col
+          ${sidebarOpen && isMobile ? 'opacity-20' : 'opacity-100'} 
+          transition-opacity duration-300
+        `}>
+          {selectedConversation && otherParticipant ? (
+            <>
+              {/* Chat Header */}
+        <div className="fixed top-0 left-0 right-0 z-50 bg-white border-b border-gray-200 p-4">
+  <div className="flex items-center justify-between">
+    <div className="flex items-center space-x-3">
+      <Button
+        variant="ghost"
+        size="icon"
+        className="md:hidden"
+        onClick={toggleSidebar}
+        aria-label="Show conversations"
+      >
+        <Menu className="h-5 w-5" />
+      </Button>
+      <img
+        src={otherParticipant.avatar_url || "/placeholder.svg"}
+        alt={otherParticipant.full_name || "User"}
+        className="w-10 h-10 rounded-full object-cover"
+      />
+      <div>
+        <h2 className="font-semibold text-gray-900">
+          {otherParticipant.full_name || otherParticipant.username}
+        </h2>
+        <p className="text-sm text-gray-500">
+          {otherParticipant.specialty || 'VisionHub Member'}
+        </p>
+      </div>
+    </div>
+    <div className="flex items-center space-x-1">
+      <Button variant="ghost" size="icon" className="hidden md:flex" disabled>
+        <Phone className="h-5 w-5" />
+      </Button>
+      <Button variant="ghost" size="icon" className="hidden md:flex" disabled>
+        <Video className="h-5 w-5" />
+      </Button>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="ghost" size="icon">
+            <MoreVertical className="h-5 w-5" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem disabled>View Profile</DropdownMenuItem>
+          <DropdownMenuItem disabled>Block User</DropdownMenuItem>
+          <DropdownMenuItem disabled>Call</DropdownMenuItem>
+          <DropdownMenuItem disabled>Video Call</DropdownMenuItem>
+          <DropdownMenuItem className="text-red-600" disabled>
+            Delete Conversation
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
+  </div>
+</div>
+       <br />       
+              {/* Messages Area */}
+              <div className="flex-1 overflow-y-auto p-4 pt-20 pb-20 space-y-5">
+                {!messages || messages.length === 0 ? (
+                  <div className="text-center py-8">
+                    <MessageCircle className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+                    <p className="text-lg font-medium mb-2">No messages yet</p>
                     <p className="text-sm text-gray-500">
-                      {otherParticipant.specialty || 'VisionHub Member'}
+                      Start the conversation by sending a message
                     </p>
                   </div>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <Button variant="ghost" size="icon" disabled>
-                    <Phone className="h-5 w-5" />
+                ) : (
+                  messages.map((message) => {
+                    const isMyMessage = message.sender_id === user?.id;
+                    return (
+                      <div
+                        key={message.id}
+                        className={`flex items-start space-x-2 ${
+                          isMyMessage ? 'flex-row-reverse space-x-reverse' : ''
+                        }`}
+                      >
+                        <img
+                          src={message.sender_profile?.avatar_url || "/placeholder.svg"}
+                          alt={message.sender_profile?.full_name || "User"}
+                          className="w-8 h-8 rounded-full"
+                        />
+                        <div className={`max-w-[70%] space-y-1`}>
+                          <div className={`rounded-2xl px-4 py-2 ${
+                            isMyMessage 
+                              ? 'bg-slate-800 text-white' 
+                              : 'bg-gray-100 text-gray-900'
+                          }`}>
+                            {message.content}
+                          </div>
+                          <p className={`text-xs text-gray-500 ${
+                            isMyMessage ? 'text-right' : ''
+                          }`}>
+                            {new Date(message.created_at).toLocaleTimeString([], {
+                              hour: '2-digit',
+                              minute: '2-digit'
+                            })}
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+                <div ref={messagesEndRef} />
+              </div>
+
+              {/* Message Input */}
+<div className="fixed bottom-20 left-0 right-0 z-50 border-t border-gray-200 p-3 sm:p-4 bg-white">
+                <form 
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    if (messageText.trim()) {
+                      sendMessage.mutate({ content: messageText });
+                    }
+                  }}
+                  className="flex items-end space-x-2 sm:space-x-3"
+                >
+                  <div className="flex-1">
+                    <Input
+                      ref={messageInputRef}
+                      placeholder="Type a message..."
+                      value={messageText}
+                      onChange={(e) => setMessageText(e.target.value)}
+                      onKeyDown={handleKeyPress}
+                      className="min-h-[2.5rem]"
+                    />
+                  </div>
+                  <Button 
+                    type="submit" 
+                    size="icon"
+                    disabled={!messageText.trim() || sendMessage.isPending}
+                    className="h-10 w-10"
+                  >
+                    {sendMessage.isPending ? (
+                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    ) : (
+                      <Send className="w-4 h-4" />
+                    )}
                   </Button>
-                  <Button variant="ghost" size="icon" disabled>
-                    <Video className="h-5 w-5" />
-                  </Button>
-                  <Button variant="ghost" size="icon" disabled>
-                    <Info className="h-5 w-5" />
-                  </Button>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon">
-                        <MoreVertical className="h-5 w-5" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem disabled>View Profile</DropdownMenuItem>
-                      <DropdownMenuItem disabled>Block User</DropdownMenuItem>
-                      <DropdownMenuItem className="text-red-600" disabled>
-                        Delete Conversation
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
+                </form>
+              </div>
+            </>
+          ) : (
+            <div className="flex-1 flex items-center justify-center bg-gray-50 p-4">
+              <div className="text-center max-w-sm">
+                <MessageCircle className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+                <p className="text-lg font-medium text-gray-900">Select a conversation</p>
+                <p className="text-sm text-gray-500 mb-6">
+                  Choose from your existing conversations or start a new one
+                </p>
+                <Button
+                  onClick={() => setShowNewChatDialog(true)}
+                  className="mt-2"
+                  disabled={connectionsLoading}
+                >
+                  <MessageCircle className="w-4 h-4 mr-2" />
+                  Start New Chat
+                </Button>
+                <Button 
+                  variant="outline"
+                  onClick={toggleSidebar} 
+                  className="mt-4 md:hidden"
+                >
+                  <Users className="w-4 h-4 mr-2" />
+                  View Conversations
+                </Button>
               </div>
             </div>
-            
-            {/* Messages Area */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-4">
-              {!messages || messages.length === 0 ? (
-                <div className="text-center py-8">
-                  <MessageCircle className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-                  <p className="text-lg font-medium mb-2">No messages yet</p>
-                  <p className="text-sm text-gray-500">
-                    Start the conversation by sending a message
-                  </p>
-                </div>
-              ) : (
-                messages.map((message) => {
-                  const isMyMessage = message.sender_id === user?.id;
-                  return (
-                    <div
-                      key={message.id}
-                      className={`flex items-start space-x-2 ${
-                        isMyMessage ? 'flex-row-reverse space-x-reverse' : ''
-                      }`}
-                    >
-                      <img
-                        src={message.sender_profile?.avatar_url || "/placeholder.svg"}
-                        alt={message.sender_profile?.full_name || "User"}
-                        className="w-8 h-8 rounded-full"
-                      />
-                      <div className={`max-w-[70%] space-y-1`}>
-                        <div className={`rounded-2xl px-4 py-2 ${
-                          isMyMessage 
-                            ? 'bg-slate-800 text-white' 
-                            : 'bg-gray-100 text-gray-900'
-                        }`}>
-                          {message.content}
-                        </div>
-                        <p className={`text-xs text-gray-500 ${
-                          isMyMessage ? 'text-right' : ''
-                        }`}>
-                          {new Date(message.created_at).toLocaleTimeString([], {
-                            hour: '2-digit',
-                            minute: '2-digit'
-                          })}
-                        </p>
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-              <div ref={messagesEndRef} />
-            </div>
-
-            {/* Message Input */}
-            <div className="border-t border-gray-200 p-4">
-              <form 
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  if (messageText.trim()) {
-                    sendMessage.mutate({ content: messageText });
-                  }
-                }}
-                className="flex items-end space-x-3"
-              >
-                <div className="flex-1">
-                  <Input
-                    ref={messageInputRef}
-                    placeholder="Type a message..."
-                    value={messageText}
-                    onChange={(e) => setMessageText(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && !e.shiftKey) {
-                        e.preventDefault();
-                        if (messageText.trim()) {
-                          sendMessage.mutate({ content: messageText });
-                        }
-                      }
-                    }}
-                    className="min-h-[2.5rem]"
-                  />
-                </div>
-                <Button 
-                  type="submit" 
-                  size="icon"
-                  disabled={!messageText.trim() || sendMessage.isPending}
-                >
-                  {sendMessage.isPending ? (
-                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  ) : (
-                    <Send className="w-4 h-4" />
-                  )}
-                </Button>
-              </form>
-            </div>
-          </div>
-        ) : (
-          <div className="flex-1 flex items-center justify-center bg-gray-50">
-            <div className="text-center">
-              <MessageCircle className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-              <p className="text-lg font-medium text-gray-900">Select a conversation</p>
-              <p className="text-sm text-gray-500">
-                Choose from your existing conversations or start a new one
-              </p>
-            </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
       {/* New Chat Dialog */}
       <Dialog open={showNewChatDialog} onOpenChange={setShowNewChatDialog}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>New Chat</DialogTitle>
           </DialogHeader>
@@ -797,43 +878,44 @@ export default function MessagesScreen() {
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
             </div>
-            <div className="space-y-2 max-h-96 overflow-y-auto">
-              {mutualConnections && mutualConnections.filter(conn =>
-                conn.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                conn.username?.toLowerCase().includes(searchTerm.toLowerCase())
-              ).map((conn) => (
-                <button
-                  key={conn.id}
-                  onClick={() => {
-                    createOrGetConversationMutation.mutate(conn.id);
-                  }}
-                  className="w-full flex items-center space-x-3 p-3 rounded-lg hover:bg-gray-50 transition-colors"
-                >
-                  <img
-                    src={conn.avatar_url || "/placeholder.svg"}
-                    alt={conn.full_name || "User"}
-                    className="w-10 h-10 rounded-full object-cover"
-                  />
-                  <div className="flex-1 min-w-0 text-left">
-                    <p className="font-medium text-gray-900">
-                      {conn.full_name || conn.username}
-                    </p>
-                    {conn.specialty && (
-                      <p className="text-sm text-gray-500">{conn.specialty}</p>
-                    )}
-                  </div>
-                  <Users className="w-5 h-5 text-gray-400" />
-                </button>
-              ))}
-              {(!mutualConnections || !mutualConnections.filter(conn =>
-                conn.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                conn.username?.toLowerCase().includes(searchTerm.toLowerCase())
-              ).length) && (
+            <div className="space-y-2 max-h-72 sm:max-h-96 overflow-y-auto">
+              {connectionsLoading ? (
+                <div className="flex justify-center items-center py-8">
+                  <div className="w-8 h-8 border-4 border-slate-200 border-t-slate-800 rounded-full animate-spin"></div>
+                </div>
+              ) : mutualConnections && filteredConnections.length > 0 ? (
+                filteredConnections.map((conn) => (
+                  <button
+                    key={conn.id}
+                    onClick={() => {
+                      createOrGetConversationMutation.mutate(conn.id);
+                    }}
+                    className="w-full flex items-center space-x-3 p-3 rounded-lg hover:bg-gray-50 transition-colors"
+                  >
+                    <img
+                      src={conn.avatar_url || "/placeholder.svg"}
+                      alt={conn.full_name || "User"}
+                      className="w-10 h-10 rounded-full object-cover"
+                    />
+                    <div className="flex-1 min-w-0 text-left">
+                      <p className="font-medium text-gray-900 truncate">
+                        {conn.full_name || conn.username}
+                      </p>
+                      {conn.specialty && (
+                        <p className="text-sm text-gray-500 truncate">
+                          {conn.specialty}
+                        </p>
+                      )}
+                    </div>
+                    <Users className="w-5 h-5 text-gray-400" />
+                  </button>
+                ))
+              ) : (
                 <div className="text-center py-8">
                   <Users className="w-12 h-12 mx-auto mb-3 text-gray-300" />
                   <p className="text-lg font-medium mb-2">No connections found</p>
                   <p className="text-sm text-gray-500">
-                    Try searching for a different name
+                    {searchTerm ? 'Try searching for a different name' : 'Follow some users to start chatting'}
                   </p>
                 </div>
               )}
@@ -843,4 +925,4 @@ export default function MessagesScreen() {
       </Dialog>
     </div>
   );
-};
+}

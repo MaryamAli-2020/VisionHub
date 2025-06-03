@@ -487,71 +487,78 @@ const ViewFeed = () => {
       </div>
 
       {/* Filter Tabs */}
-      <div className="max-w-4xl mx-auto px-6 py-4">
-        <div className="flex space-x-1 bg-gray-100 p-1 rounded-lg w-fit">
-          <button
-            onClick={() => setFilter('all')}
-            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-              filter === 'all'
-                ? 'bg-white text-slate-700 shadow-sm'
-                : 'text-gray-600 hover:text-gray-900'
-            }`}
-          >
-            All
-            {allNotifications.length > 0 && (
-              <span className="ml-2 bg-gray-300 text-gray-700 px-2 py-0.5 rounded-full text-xs">
-                {allNotifications.length}
-              </span>
-            )}
-          </button>
+      <div className=" p-2 bg-gray-50 z-10 border-b border-gray-200">
+        <div className="max-w-4xl mx-auto px-6 py-4">
+          <div className="flex justify-center">            <div className="bg-gray-100 p-1 rounded-lg flex space-x-10">
+              <button
+                onClick={() => setFilter('all')}
+                className={`w-12 h-10 rounded-md flex items-center justify-center transition-colors relative ${
+                  filter === 'all'
+                    ? 'bg-white text-slate-700 shadow-sm'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+                aria-label="All notifications"
+              >
+                <Bell className="w-5 h-5" />
+                {allNotifications.length > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-blue-500 text-white w-4 h-4 flex items-center justify-center rounded-full text-xs">
+                    {allNotifications.length}
+                  </span>
+                )}
+              </button>
 
-          <button
-            onClick={() => setFilter('follows')}
-            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-              filter === 'follows'
-                ? 'bg-white text-slate-700 shadow-sm'
-                : 'text-gray-600 hover:text-gray-900'
-            }`}
-          >
-            Follows
-            {(recentFollowers?.length || 0) > 0 && (
-              <span className="ml-2 bg-gray-300 text-gray-700 px-2 py-0.5 rounded-full text-xs">
-                {recentFollowers?.length}
-              </span>
-            )}
-          </button>
+              <button
+                onClick={() => setFilter('follows')}
+                className={`w-12 h-10 rounded-md flex items-center justify-center transition-colors relative ${
+                  filter === 'follows'
+                    ? 'bg-white text-slate-700 shadow-sm'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+                aria-label="Show follows"
+              >
+                <UserPlus className="w-5 h-5" />
+                {(recentFollowers?.length || 0) > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-blue-500 text-white w-4 h-4 flex items-center justify-center rounded-full text-xs">
+                    {recentFollowers?.length}
+                  </span>
+                )}
+              </button>
 
-          <button
-            onClick={() => setFilter('likes')}
-            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-              filter === 'likes'
-                ? 'bg-white text-slate-700 shadow-sm'
-                : 'text-gray-600 hover:text-gray-900'
-            }`}
-          >
-            Likes
-            {((postLikes?.length || 0) + (videoLikes?.length || 0)) > 0 && (
-              <span className="ml-2 bg-gray-300 text-gray-700 px-2 py-0.5 rounded-full text-xs">
-                {(postLikes?.length || 0) + (videoLikes?.length || 0)}
-              </span>
-            )}
-          </button>
+              <button
+                onClick={() => setFilter('likes')}
+                className={`w-12 h-10 rounded-md flex items-center justify-center transition-colors relative ${
+                  filter === 'likes'
+                    ? 'bg-white text-slate-700 shadow-sm'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+                aria-label="Show likes"
+              >
+                <Heart className="w-5 h-5" />
+                {((postLikes?.length || 0) + (videoLikes?.length || 0)) > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-blue-500 text-white w-4 h-4 flex items-center justify-center rounded-full text-xs">
+                    {(postLikes?.length || 0) + (videoLikes?.length || 0)}
+                  </span>
+                )}
+              </button>
 
-          <button
-            onClick={() => setFilter('comments')}
-            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-              filter === 'comments'
-                ? 'bg-white text-slate-700 shadow-sm'
-                : 'text-gray-600 hover:text-gray-900'
-            }`}
-          >
-            Comments
-            {((postComments?.length || 0) + (videoComments?.length || 0)) > 0 && (
-              <span className="ml-2 bg-gray-300 text-gray-700 px-2 py-0.5 rounded-full text-xs">
-                {(postComments?.length || 0) + (videoComments?.length || 0)}
-              </span>
-            )}
-          </button>
+              <button
+                onClick={() => setFilter('comments')}
+                className={`w-12 h-10 rounded-md flex items-center justify-center transition-colors relative ${
+                  filter === 'comments'
+                    ? 'bg-white text-slate-700 shadow-sm'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+                aria-label="Show comments"
+              >
+                <MessageCircle className="w-5 h-5" />
+                {((postComments?.length || 0) + (videoComments?.length || 0)) > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-blue-500 text-white w-4 h-4 flex items-center justify-center rounded-full text-xs">
+                    {(postComments?.length || 0) + (videoComments?.length || 0)}
+                  </span>
+                )}
+              </button>
+            </div>
+          </div>
         </div>
       </div>
 
