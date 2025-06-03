@@ -571,10 +571,10 @@ export default function MessagesScreen() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 overflow-hidden">
+    <div className="bg-gray-50 overflow-hidden">
       
 
-      <div className="flex h-[calc(100vh-56px)] md:h-screen relative">
+      <div className="flex h-[calc(100vh-80px)] md:h-screen relative">
         {/* Conversations Sidebar */}
         <div 
           className={`
@@ -842,10 +842,10 @@ export default function MessagesScreen() {
                 </p>
                 <Button
                   onClick={() => setShowNewChatDialog(true)}
-                  className="mt-2"
+                  className="mt-2 mr-4"
                   disabled={connectionsLoading}
                 >
-                  <MessageCircle className="w-4 h-4 mr-2" />
+                  <MessageCircle className="w-4 h-4 mr-2 " />
                   Start New Chat
                 </Button>
                 <Button 
