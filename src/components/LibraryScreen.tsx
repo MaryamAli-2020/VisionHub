@@ -35,6 +35,7 @@ interface NewsItem {
   description: string;
   image: string;
   category: string;
+  url?: string;
   requirements?: {
     education: string;
     skills: string[];
@@ -182,15 +183,16 @@ const LibraryScreen = () => {
     const firstDate = dateStr.split('-')[0].trim(); // Get the first date in case of a range
     return new Date(firstDate);
   };
-
   const filteredArticles = useMemo(() => {
     const query = searchQuery.toLowerCase();
-    let filtered = newsAndEvents.filter(item => 
-      item.category !== 'Webinars' && (
+    let filtered = newsAndEvents.filter(item => {
+      // Only exclude the specific "Webinars" category, keep "Other Webinars and Conferences"
+      if (item.category === 'Webinars') return false;
+      return (
         item.title.toLowerCase().includes(query) ||
         item.description.toLowerCase().includes(query)
-      )
-    );
+      );
+    });
 
     if (selectedCategory !== 'All') {
       filtered = filtered.filter(item => item.category === selectedCategory);
@@ -212,9 +214,11 @@ const LibraryScreen = () => {
         return dateB.getTime() - dateA.getTime(); // Always show newest webinars first
       });
   }, []);
-
   const categories = useMemo(() => {
-    return Array.from(new Set(newsAndEvents.map(item => item.category)));
+    return Array.from(new Set(newsAndEvents
+      .filter(item => item.category !== 'Webinars')
+      .map(item => item.category)
+    ));
   }, []);
 
   const getEventStatus = (date: string): 'Upcoming' | 'Ended' => {
@@ -300,9 +304,16 @@ const LibraryScreen = () => {
               <span>{formatNumber(item.engagement.comments)}</span>
             </div>
           </div>
-        )}
-
-        <Button variant="outline" className="w-full rounded-xl border-red-500 text-red-500 hover:bg-red-50">
+        )}        <Button 
+          variant="outline" 
+          className="w-full rounded-xl border-red-500 text-red-500 hover:bg-red-50"
+          onClick={() => {
+            if (item.url) {
+              window.open(item.url, '_blank');
+            }
+          }}
+          disabled={!item.url}
+        >
           {item.category === 'Career Opportunities' ? 'Send Resume →' :
            (['Webinars', 'Other Webinars and Conferences'].includes(item.category))
             ? getEventStatus(item.date) === 'Upcoming' ? 'Register Now →' : 'Watch Recording →'
