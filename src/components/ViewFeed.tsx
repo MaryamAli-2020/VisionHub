@@ -82,17 +82,19 @@ const ViewFeed = () => {
   const { user } = useAuth();
   const [filter, setFilter] = useState<'all' | 'follows' | 'likes' | 'comments'>('all');
 
-  // Fetch recent followers
+  // Fetch people who followed YOU (not who you follow)
   const { data: recentFollowers } = useQuery<FollowWithProfile[], PostgrestError>({
     queryKey: ['recent-followers', user?.id],
     queryFn: async () => {
-      if (!user?.id) return [];      const { data, error } = await supabase
+      if (!user?.id) return [];
+
+      const { data, error } = await supabase
         .from('follows')
         .select(`
           *,
-          profiles!follows_following_id_fkey (*)
+          profiles!follows_follower_id_fkey (*)
         `)
-        .eq('follower_id', user.id)
+        .eq('following_id', user.id) // Changed: get people who follow you
         .order('created_at', { ascending: false })
         .limit(20);
 
@@ -105,7 +107,7 @@ const ViewFeed = () => {
     enabled: !!user?.id
   });
 
-  // Fetch recent likes on posts
+  // Fetch recent likes on YOUR posts
   const { data: postLikes } = useQuery<PostLikeWithProfile[], PostgrestError>({
     queryKey: ['post-likes', user?.id],
     queryFn: async () => {
@@ -116,7 +118,9 @@ const ViewFeed = () => {
         .select('id')
         .eq('user_id', user.id);
 
-      if (!userPosts?.length) return [];      const { data, error } = await supabase
+      if (!userPosts?.length) return [];
+
+      const { data, error } = await supabase
         .from('post_likes')
         .select(`
           *,
@@ -137,7 +141,7 @@ const ViewFeed = () => {
     enabled: !!user?.id
   });
 
-  // Fetch recent likes on videos
+  // Fetch recent likes on YOUR videos
   const { data: videoLikes } = useQuery<VideoLikeWithProfile[], PostgrestError>({
     queryKey: ['video-likes', user?.id],
     queryFn: async () => {
@@ -180,7 +184,7 @@ const ViewFeed = () => {
     enabled: !!user?.id
   });
 
-  // Fetch recent comments on posts
+  // Fetch recent comments on YOUR posts
   const { data: postComments } = useQuery<PostCommentWithProfile[], PostgrestError>({
     queryKey: ['post-comments', user?.id],
     queryFn: async () => {
@@ -191,7 +195,9 @@ const ViewFeed = () => {
         .select('id')
         .eq('user_id', user.id);
 
-      if (!userPosts?.length) return [];      const { data, error } = await supabase
+      if (!userPosts?.length) return [];
+
+      const { data, error } = await supabase
         .from('post_comments')
         .select(`
           *,
@@ -212,7 +218,7 @@ const ViewFeed = () => {
     enabled: !!user?.id
   });
 
-  // Fetch recent comments on videos
+  // Fetch recent comments on YOUR videos
   const { data: videoComments } = useQuery<VideoCommentWithProfile[], PostgrestError>({
     queryKey: ['video-comments', user?.id],
     queryFn: async () => {
@@ -255,9 +261,9 @@ const ViewFeed = () => {
     enabled: !!user?.id
   });
 
-  // Combine and sort all notifications
+  // Combine and sort all notifications by created_at (most recent first)
   const allNotifications: NotificationItem[] = [
-    // Recent followers
+    // People who followed YOU
     ...(recentFollowers?.map(follow => ({
       id: `follow-${follow.id}`,
       type: 'follow' as const,
@@ -272,7 +278,7 @@ const ViewFeed = () => {
       }
     })) || []),
     
-    // Post likes
+    // Likes on YOUR posts
     ...(postLikes?.map(like => ({
       id: `post-like-${like.id}`,
       type: 'like_post' as const,
@@ -292,7 +298,7 @@ const ViewFeed = () => {
       }
     })) || []),
     
-    // Video likes
+    // Likes on YOUR videos
     ...(videoLikes?.map(like => ({
       id: `video-like-${like.id}`,
       type: 'like_video' as const,
@@ -312,7 +318,7 @@ const ViewFeed = () => {
       }
     })) || []),
     
-    // Post comments
+    // Comments on YOUR posts
     ...(postComments?.map(comment => ({
       id: `post-comment-${comment.id}`,
       type: 'comment_post' as const,
@@ -333,7 +339,7 @@ const ViewFeed = () => {
       comment_content: comment.content
     })) || []),
     
-    // Video comments
+    // Comments on YOUR videos
     ...(videoComments?.map(comment => ({
       id: `video-comment-${comment.id}`,
       type: 'comment_video' as const,

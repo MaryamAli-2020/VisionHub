@@ -76,22 +76,48 @@ export type Database = {
           user_id?: string
           video_id?: string
         }
+        Relationships: []
+      }
+      conversations: {
+        Row: {
+          created_at: string | null
+          created_by: string | null
+          id: string
+          last_message_id: string | null
+          participant_ids: string[]
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          last_message_id?: string | null
+          participant_ids: string[]
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          last_message_id?: string | null
+          participant_ids?: string[]
+          updated_at?: string | null
+        }
         Relationships: [
           {
-            foreignKeyName: "comments_user_id_fkey"
-            columns: ["user_id"]
+            foreignKeyName: "conversations_created_by_fkey"
+            columns: ["created_by"]
             isOneToOne: false
-            referencedRelation: "users"
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
-            referencedSchema: "auth"
           },
           {
-            foreignKeyName: "comments_video_id_fkey"
-            columns: ["video_id"]
+            foreignKeyName: "fk_last_message"
+            columns: ["last_message_id"]
             isOneToOne: false
-            referencedRelation: "videos"
+            referencedRelation: "messages"
             referencedColumns: ["id"]
-          }
+          },
         ]
       }
       follows: {
@@ -156,6 +182,54 @@ export type Database = {
           user_id?: string | null
         }
         Relationships: []
+      }
+      messages: {
+        Row: {
+          content: string
+          conversation_id: string
+          created_at: string | null
+          id: string
+          message_type: string | null
+          read_at: string | null
+          sender_id: string
+          updated_at: string | null
+        }
+        Insert: {
+          content: string
+          conversation_id: string
+          created_at?: string | null
+          id?: string
+          message_type?: string | null
+          read_at?: string | null
+          sender_id: string
+          updated_at?: string | null
+        }
+        Update: {
+          content?: string
+          conversation_id?: string
+          created_at?: string | null
+          id?: string
+          message_type?: string | null
+          read_at?: string | null
+          sender_id?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "messages_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "messages_sender_id_fkey"
+            columns: ["sender_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       post_comments: {
         Row: {
@@ -408,23 +482,7 @@ export type Database = {
           user_id?: string
           video_id?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "video_likes_user_id_fkey"
-            columns: ["user_id"]
-            isOneToOne: false
-            referencedRelation: "users"
-            referencedColumns: ["id"]
-            referencedSchema: "auth"
-          },
-          {
-            foreignKeyName: "video_likes_video_id_fkey"
-            columns: ["video_id"]
-            isOneToOne: false
-            referencedRelation: "videos"
-            referencedColumns: ["id"]
-          }
-        ]
+        Relationships: []
       }
       video_views: {
         Row: {
@@ -520,93 +578,6 @@ export type Database = {
           },
         ]
       }
-      messages: {
-        Row: {
-          id: string;
-          conversation_id: string;
-          sender_id: string;
-          content: string;
-          created_at: string | null;
-          updated_at: string | null;
-          read_at: string | null;
-        }
-        Insert: {
-          id?: string;
-          conversation_id: string;
-          sender_id: string;
-          content: string;
-          created_at?: string | null;
-          updated_at?: string | null;
-          read_at?: string | null;
-        }
-        Update: {
-          id?: string;
-          conversation_id?: string;
-          sender_id?: string;
-          content?: string;
-          created_at?: string | null
-          updated_at?: string | null
-          read_at?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "messages_sender_id_fkey"
-            columns: ["sender_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "messages_conversation_id_fkey"
-            columns: ["conversation_id"]
-            isOneToOne: false
-            referencedRelation: "conversations"
-            referencedColumns: ["id"]
-          }
-        ]
-      }
-      conversations: {
-        Row: {
-          id: string;
-          participant_ids: string[];
-          created_by: string;
-          created_at: string | null;
-          updated_at: string | null;
-          last_message_id: string | null;
-        }
-        Insert: {
-          id?: string;
-          participant_ids: string[];
-          created_by: string;
-          created_at?: string | null;
-          updated_at?: string | null;
-          last_message_id?: string | null;
-        }
-        Update: {
-          id?: string;
-          participant_ids?: string[];
-          created_by?: string;
-          created_at?: string | null
-          updated_at?: string | null
-          last_message_id?: string | null
-        }
-        Relationships: [
-          {
-            foreignKeyName: "conversations_created_by_fkey"
-            columns: ["created_by"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "conversations_last_message_id_fkey"
-            columns: ["last_message_id"]
-            isOneToOne: false
-            referencedRelation: "messages"
-            referencedColumns: ["id"]
-          }
-        ]
-      }
     }
     Views: {
       [_ in never]: never
@@ -653,7 +624,7 @@ export type Tables<
   }
     ? keyof (Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
         Database[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never,
+    : never = never,
 > = DefaultSchemaTableNameOrOptions extends { schema: keyof Database }
   ? (Database[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
       Database[DefaultSchemaTableNameOrOptions["schema"]]["Views"])[TableName] extends {
