@@ -1,5 +1,5 @@
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Home, Plus, User, Video, Earth } from 'lucide-react';
+import { Home, Plus, User, Video, Earth, Settings } from 'lucide-react';
 
 const BottomNavigation = () => {
   const navigate = useNavigate();
@@ -57,8 +57,8 @@ const BottomNavigation = () => {
             location.pathname === '/profile-settings' ? 'text-red-500' : 'text-gray-500'
           }`}
         >
-          <User className="w-6 h-6" />
-          <span className="text-xs mt-1">Profile</span>
+          <Settings className="w-6 h-6" />
+          <span className="text-xs mt-1">Settings</span>
         </button>
       </div>
     </div>
