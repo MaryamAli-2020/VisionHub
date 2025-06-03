@@ -1,3 +1,4 @@
+
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
@@ -32,13 +33,13 @@ type DBConversation = TableRow<'conversations'>;
 
 type Profile = Pick<DBProfile, 'id' | 'username' | 'full_name' | 'avatar_url' | 'specialty'>;
 
-interface Message extends DBMessage {
+interface Message extends Omit<DBMessage, 'message_type'> {
   sender_profile?: Profile;
+  message_type?: 'text' | 'media';
 }
 
 interface MessageWithProfile extends Message {
   sender_profile: Profile;
-  message_type?: 'text' | 'media';
 }
 
 interface ConversationWithDetails extends Omit<DBConversation, 'participant_profiles'> {
@@ -178,7 +179,11 @@ export default function MessagesScreen() {
         throw error;
       }
       
-      return data || [];
+      return data?.map(msg => ({
+        ...msg,
+        message_type: (msg.message_type as 'text' | 'media') || 'text',
+        sender_profile: msg.sender_profile as Profile
+      })) || [];
     },
     enabled: !!selectedConversation,
     staleTime: 10000, // 10 seconds
@@ -331,7 +336,12 @@ export default function MessagesScreen() {
           .single();
 
         if (error) throw error;
-        return data;
+        
+        return {
+          ...data,
+          message_type: (data.message_type as 'text' | 'media') || 'text',
+          sender_profile: data.sender_profile as Profile
+        };
       } catch (error) {
         console.error('Error sending message:', error);
         throw error;
@@ -439,7 +449,7 @@ export default function MessagesScreen() {
   }, []);
 
   useEffect(() => {
-    if (messages?.length) {
+    if (messages && messages.length > 0) {
       // Small delay to ensure DOM is updated
       setTimeout(scrollToBottom, 100);
     }
@@ -676,7 +686,7 @@ export default function MessagesScreen() {
             
             {/* Messages Area */}
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
-              {messages?.length === 0 ? (
+              {!messages || messages.length === 0 ? (
                 <div className="text-center py-8">
                   <MessageCircle className="w-12 h-12 mx-auto mb-3 text-gray-300" />
                   <p className="text-lg font-medium mb-2">No messages yet</p>
@@ -685,7 +695,7 @@ export default function MessagesScreen() {
                   </p>
                 </div>
               ) : (
-                messages?.map((message) => {
+                messages.map((message) => {
                   const isMyMessage = message.sender_id === user?.id;
                   return (
                     <div
@@ -734,7 +744,8 @@ export default function MessagesScreen() {
                 }}
                 className="flex items-end space-x-3"
               >
-                <div className="flex-1">                  <Input
+                <div className="flex-1">
+                  <Input
                     ref={messageInputRef}
                     placeholder="Type a message..."
                     value={messageText}
@@ -794,7 +805,7 @@ export default function MessagesScreen() {
               />
             </div>
             <div className="space-y-2 max-h-96 overflow-y-auto">
-              {mutualConnections?.filter(conn =>
+              {mutualConnections && mutualConnections.filter(conn =>
                 conn.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                 conn.username?.toLowerCase().includes(searchTerm.toLowerCase())
               ).map((conn) => (
@@ -821,10 +832,10 @@ export default function MessagesScreen() {
                   <Users className="w-5 h-5 text-gray-400" />
                 </button>
               ))}
-              {!mutualConnections?.filter(conn =>
+              {(!mutualConnections || !mutualConnections.filter(conn =>
                 conn.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                 conn.username?.toLowerCase().includes(searchTerm.toLowerCase())
-              ).length && (
+              ).length) && (
                 <div className="text-center py-8">
                   <Users className="w-12 h-12 mx-auto mb-3 text-gray-300" />
                   <p className="text-lg font-medium mb-2">No connections found</p>

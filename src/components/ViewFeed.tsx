@@ -157,7 +157,7 @@ const ViewFeed = () => {
       // First get the video likes
       const { data: likesData, error: likesError } = await supabase
         .from('video_likes')
-        .select('*, videos!video_likes_video_id_fkey (id, title, thumbnail_url)')
+        .select('*')
         .in('video_id', userVideos.map(v => v.id))
         .order('created_at', { ascending: false })
         .limit(20);
@@ -165,8 +165,17 @@ const ViewFeed = () => {
       if (likesError) throw likesError;
       if (!likesData) return [];
 
-      // Then fetch profiles for all users who liked
+      // Then fetch videos and profiles separately
+      const videoIds = [...new Set(likesData.map(like => like.video_id))];
       const userIds = [...new Set(likesData.map(like => like.user_id))];
+
+      const { data: videosData, error: videosError } = await supabase
+        .from('videos')
+        .select('id, title, thumbnail_url')
+        .in('id', videoIds);
+
+      if (videosError) throw videosError;
+
       const { data: profilesData, error: profilesError } = await supabase
         .from('profiles')
         .select('*')
@@ -174,11 +183,11 @@ const ViewFeed = () => {
 
       if (profilesError) throw profilesError;
 
-      // Combine likes with their user profiles
+      // Combine likes with their user profiles and videos
       return likesData.map(like => ({
         ...like,
         profiles: profilesData?.find(p => p.id === like.user_id) as Profile,
-        videos: like.videos as VideoPreview
+        videos: videosData?.find(v => v.id === like.video_id) as VideoPreview
       })) || [];
     },
     enabled: !!user?.id
@@ -231,10 +240,10 @@ const ViewFeed = () => {
 
       if (!userVideos?.length) return [];
 
-      // First get the comments with video details
+      // First get the comments
       const { data: commentsData, error: commentsError } = await supabase
         .from('comments')
-        .select('*, videos!comments_video_id_fkey (id, title, thumbnail_url)')
+        .select('*')
         .in('video_id', userVideos.map(v => v.id))
         .order('created_at', { ascending: false })
         .limit(20);
@@ -242,8 +251,17 @@ const ViewFeed = () => {
       if (commentsError) throw commentsError;
       if (!commentsData) return [];
 
-      // Then fetch profiles for all commenters
+      // Then fetch videos and profiles separately
+      const videoIds = [...new Set(commentsData.map(comment => comment.video_id))];
       const userIds = [...new Set(commentsData.map(comment => comment.user_id))];
+
+      const { data: videosData, error: videosError } = await supabase
+        .from('videos')
+        .select('id, title, thumbnail_url')
+        .in('id', videoIds);
+
+      if (videosError) throw videosError;
+
       const { data: profilesData, error: profilesError } = await supabase
         .from('profiles')
         .select('*')
@@ -251,11 +269,11 @@ const ViewFeed = () => {
 
       if (profilesError) throw profilesError;
 
-      // Combine comments with their user profiles
+      // Combine comments with their user profiles and videos
       return commentsData.map(comment => ({
         ...comment,
         profiles: profilesData?.find(p => p.id === comment.user_id) as Profile,
-        videos: comment.videos as VideoPreview
+        videos: videosData?.find(v => v.id === comment.video_id) as VideoPreview
       })) || [];
     },
     enabled: !!user?.id
