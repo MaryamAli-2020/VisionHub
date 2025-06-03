@@ -1,4 +1,3 @@
-
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/hooks/useAuth';
@@ -197,16 +196,10 @@ export default function MessagesScreen() {
       if (!user?.id) throw new Error('Not authenticated');
       
       try {
-        // First try to find an existing conversation      
+        // First try to find an existing conversation - simplified query without messages
         const { data: existingConversations, error: searchError } = await supabase
           .from('conversations')
-          .select(`
-            *,
-            messages(
-              *,
-              sender_profile:profiles!sender_id(id, username, full_name, avatar_url, specialty)
-            )
-          `)
+          .select('*')
           .filter('participant_ids', 'cs', `{${user.id}}`)
           .filter('participant_ids', 'cs', `{${participantId}}`)
           .limit(1);
@@ -235,7 +228,7 @@ export default function MessagesScreen() {
           conversationToReturn = {
             ...existingConversation,
             participant_profiles: existingProfiles || [],
-            last_message: existingConversation.messages?.[0] || null,
+            last_message: undefined,
             unread_count: 0,
             messages: []
           };
